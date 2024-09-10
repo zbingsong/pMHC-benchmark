@@ -1,11 +1,13 @@
 import pandas as pd
 import torch
+
 import subprocess
 import os
 import json
 import time
+import pathlib
 
-from models import BasePredictor
+from . import BasePredictor
 
 
 class NetMHCpanPredictor(BasePredictor):
@@ -15,7 +17,8 @@ class NetMHCpanPredictor(BasePredictor):
     @classmethod
     def load(cls) -> None:
         cls.tasks = ['BA', 'EL']
-        with open('configs.json', 'r') as f:
+        curr_dir = pathlib.Path(__file__).parent
+        with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
             cls._executable = configs['exe_path']
 

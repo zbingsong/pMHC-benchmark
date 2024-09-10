@@ -1,9 +1,10 @@
 from mhcflurry import Class1PresentationPredictor
 import pandas as pd
 import torch
+
 import time
 
-from base import BasePredictor
+from . import BasePredictor
 
 
 class MHCflurryPredictor(BasePredictor):
