@@ -3,8 +3,7 @@ import json
 import argparse
 import enum
 
-import models
-import utils
+import src
 
 
 class Predictors(enum.Enum):
@@ -29,10 +28,10 @@ class Predictors(enum.Enum):
             - List of log50k values as tensors with length m if this DataFrame has "log50k" column, or 0 if not
             - Each tensor (if list has a positive length) has length n
     '''
-    MHCFLURRY = models.MHCflurryPredictor()
-    MIXMHCPRED = models.MixMHCpredPredictor()
-    NETMHCPAN = models.NetMHCpanPredictor()
-    DEFAULT = models.BasePredictor()
+    MHCFLURRY = src.MHCflurryPredictor()
+    MIXMHCPRED = src.MixMHCpredPredictor()
+    NETMHCPAN = src.NetMHCpanPredictor()
+    DEFAULT = src.BasePredictor()
 
     @classmethod
     def _missing_(cls, value: str):
@@ -50,7 +49,7 @@ def main(model_name: str):
     Parameters:
     model_name (str): name of the model to test
     '''
-    predictor: models.BasePredictor = Predictors(model_name.upper()).value
+    predictor: src.BasePredictor = Predictors(model_name.upper()).value
     predictor.load()
 
     with open('configs.json', 'r') as f:
@@ -71,12 +70,12 @@ def main(model_name: str):
         if 'log50k' in df.columns:
             df = df.astype({'log50k': float})
         df = df.groupby('mhc_name')
-        predictions, labels, log50ks = predictor.run(df)
+        predictions, labels, log50ks, time_taken = predictor.run(df)
         for prediction, task in zip(predictions, predictor.tasks):
             with open(f'{output_dir}/{model_name}/{task}_{filename[:-4]}.txt', 'w') as file:
-                utils.test_retrieval(prediction, labels, file)
+                src.test_retrieval(prediction, labels, time_taken, file)
                 if task == 'BA':
-                    utils.test_regression(prediction, log50ks, file)
+                    src.test_regression(prediction, log50ks, file)
 
     # test sensitivity
     df = pd.read_csv(f'{data_dir}/pairs.csv')
@@ -84,7 +83,7 @@ def main(model_name: str):
     prediction_diffs, log50k_diffs = predictor.run_sensitivity(df)
     for prediction_diff, log50k_diff, task in zip(prediction_diffs, log50k_diffs, predictor.tasks):
         with open(f'{output_dir}/{model_name}/{task}_sensitivity.txt', 'w') as file:
-            utils.test_sensitivity(prediction_diff, log50k_diff, file)
+            src.test_sensitivity(prediction_diff, log50k_diff, file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
