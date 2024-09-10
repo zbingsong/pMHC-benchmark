@@ -39,7 +39,7 @@ class MixMHCpredPredictor(BasePredictor):
                     f.write(f'>{peptide}\n{peptide}\n')
             mhc_formatted = mhc_name[4:].replace(':', '')
             start_time = time.time_ns()
-            run_result = subprocess.run(f'{cls._executable} -i peptides.fasta -o result.tsv -a {mhc_formatted}')
+            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
             end_time = time.time_ns()
             assert run_result.returncode == 0
             times.append(end_time - start_time)
@@ -69,7 +69,7 @@ class MixMHCpredPredictor(BasePredictor):
                 for peptide in peptides1:
                     f.write(f'>{peptide}\n{peptide}\n')
             mhc_formatted = mhc[4:].replace(':', '')
-            run_result = subprocess.run(f'{cls._executable} -i peptides.fasta -o result.tsv -a {mhc_formatted}')
+            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
             assert run_result.returncode == 0
             result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
             preds1.append(torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double))
@@ -77,7 +77,7 @@ class MixMHCpredPredictor(BasePredictor):
             with open(f'peptides.fasta', 'w') as f:
                 for peptide in peptides2:
                     f.write(f'>{peptide}\n{peptide}\n')
-            run_result = subprocess.run(f'{cls._executable} -i peptides.fasta -o result.tsv -a {mhc_formatted}')
+            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
             assert run_result.returncode == 0
             result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
             preds2.append(torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double))
