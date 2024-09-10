@@ -46,7 +46,7 @@ class NetMHCpanPredictor(BasePredictor):
             BA_preds.append(100 - torch.tensor(result_df['BA_Rank'].tolist(), dtype=torch.double))
             EL_preds.append(100 - torch.tensor(result_df['EL_Rank'].tolist(), dtype=torch.double))
             labels.append(torch.tensor(group['label'].tolist(), dtype=torch.long))
-            if 'log50k' in df.columns:
+            if 'log50k' in group.columns:
                 log50ks.append(torch.tensor(group['log50k'].tolist(), dtype=torch.double))
             assert len(result_df) == len(group)
             times.append(end_time - start_time)

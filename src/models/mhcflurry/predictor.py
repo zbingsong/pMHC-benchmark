@@ -42,7 +42,7 @@ class MHCflurryPredictor(BasePredictor):
             affinity_preds.append(1 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base)
             presentation_preds.append(torch.tensor(result_df['presentation_score'].tolist(), dtype=torch.double))
             labels.append(torch.tensor(group['label'].tolist(), dtype=torch.long))
-            if 'log50k' in df.columns:
+            if 'log50k' in group.columns:
                 log50ks.append(torch.tensor(group['log50k'].tolist(), dtype=torch.double))
         return (presentation_preds, affinity_preds), labels, log50ks, sum(times)
 

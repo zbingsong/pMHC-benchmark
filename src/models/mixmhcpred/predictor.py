@@ -46,7 +46,7 @@ class MixMHCpredPredictor(BasePredictor):
             result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
             preds.append(torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double))
             labels.append(torch.tensor(group['label'].tolist(), dtype=torch.int))
-            if 'log50k' in df.columns:
+            if 'log50k' in group.columns:
                 log50ks.append(torch.tensor(group['log50k'].tolist(), dtype=torch.double))
         os.remove('peptides.fasta')
         os.remove('result.tsv')
