@@ -1,6 +1,7 @@
 #!/bin/bash
 
 MODEL_NAME="${1:-default}"
+echo "Test model: $MODEL_NAME"
 
 echo "Job started"
 screen -dmS bz_pmhc_esm
