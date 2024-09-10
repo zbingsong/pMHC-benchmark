@@ -82,8 +82,8 @@ def main(model_name: str):
     df = pd.read_csv(f'{data_dir}/pairs.csv')
     df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
     df = df.groupby('mhc_name')
-    prediction_diffs, log50k_diffs = predictor.run_sensitivity(df)
-    for prediction_diff, log50k_diff, task in zip(prediction_diffs, log50k_diffs, predictor.tasks):
+    prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
+    for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
         with open(f'{output_dir}/{model_name}/{task}_sensitivity.txt', 'w') as file:
             src.test_sensitivity(prediction_diff, log50k_diff, file)
 
