@@ -3,8 +3,8 @@ import torchmetrics.functional.classification
 import torchmetrics.functional.retrieval
 import numpy as np
 import matplotlib.pyplot as plt
+
 import io
-import typing
 
 from . import compute_binary_auroc, compute_binary_auprc, compute_auac, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef
 
@@ -144,8 +144,8 @@ def test_retrieval(
 def test_sensitivity(
         predictions_diff: torch.DoubleTensor, 
         log50ks_diff: torch.DoubleTensor,
-        plot_filename: str='sensitivity',
-        output_file: typing.Optional[io.TextIOWrapper]=None,
+        plot_filename: str,
+        output_file: io.TextIOWrapper,
 ) -> None:
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
