@@ -6,8 +6,8 @@ import abc
 class BasePredictor(abc.ABC):
     tasks = None
 
-    @abc.abstractmethod
     @classmethod
+    @abc.abstractmethod
     def load(cls) -> None:
         '''
         Set tasks and other predictor-specific attributes.
@@ -15,8 +15,8 @@ class BasePredictor(abc.ABC):
         '''
         raise NotImplementedError
 
-    @abc.abstractmethod
     @classmethod
+    @abc.abstractmethod
     def run(
             cls, 
             df: pd.api.typing.DataFrameGroupBy
@@ -39,8 +39,8 @@ class BasePredictor(abc.ABC):
         '''
         raise NotImplementedError
 
-    @abc.abstractmethod
     @classmethod
+    @abc.abstractmethod
     def run_sensitivity(
             cls, 
             df: pd.api.typing.DataFrameGroupBy
