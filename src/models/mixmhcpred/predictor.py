@@ -45,7 +45,7 @@ class MixMHCpredPredictor(BasePredictor):
             times.append(end_time - start_time)
             result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
             preds.append(torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double))
-            labels.append(torch.tensor(group['label'].tolist(), dtype=torch.int))
+            labels.append(torch.tensor(group['label'].tolist(), dtype=torch.long))
             if 'log50k' in group.columns:
                 log50ks.append(torch.tensor(group['log50k'].tolist(), dtype=torch.double))
         os.remove('peptides.fasta')
@@ -84,6 +84,7 @@ class MixMHCpredPredictor(BasePredictor):
             log50ks2.append(torch.tensor(group['log50k2'].tolist(), dtype=torch.double))
         preds_diff = torch.cat(preds1) - torch.cat(preds2)
         log50ks_diff = torch.cat(log50ks1) - torch.cat(log50ks2)
+        assert preds_diff.shape == log50ks_diff.shape
         os.remove('peptides.fasta')
         os.remove('result.tsv')
         return (preds_diff,), log50ks_diff
