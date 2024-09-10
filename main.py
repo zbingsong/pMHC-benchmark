@@ -9,6 +9,9 @@ import time
 import src
 
 
+REG_FILES = ('Pearson2016', 'Wells2020_ba')
+
+
 class Predictors(enum.Enum):
     '''
     Enum class for model functions
@@ -75,7 +78,7 @@ def main(model_name: str):
         for prediction, task in zip(predictions, predictor.tasks):
             with open(f'{output_dir}/{model_name}/{task}_{filename[:-4]}.txt', 'w') as file:
                 src.test_retrieval(prediction, labels, time_taken, file)
-                if task == 'BA':
+                if filename in REG_FILES:
                     src.test_regression(prediction, log50ks, file)
 
     # test sensitivity
