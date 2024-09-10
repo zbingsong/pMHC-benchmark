@@ -43,6 +43,9 @@ def main(model_name: str):
     Parameters:
     model_name (str): name of the model to test
     '''
+    if model_name.upper() not in Predictors.__members__:
+        raise ValueError(f'Invalid model name: {model_name}')
+    
     start_time = time.time_ns()
 
     predictor: src.BasePredictor = Predictors[model_name.upper()].value
