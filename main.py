@@ -9,7 +9,7 @@ import time
 import src
 
 
-REG_FILES = ('Pearson2016', 'Wells2020_ba')
+REG_FILES = ('Pearson2016_test.csv', 'Wells2020_ba_test.csv')
 
 
 class Predictors(enum.Enum):
