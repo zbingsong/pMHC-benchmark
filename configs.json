@@ -1,5 +1,5 @@
 {
     "filelist_path": "files.txt",
-    "data_dir": "../data_pmhc",
+    "data_dir": "../data_pmhc/benchmark",
     "output_dir": "outputs"
 }
