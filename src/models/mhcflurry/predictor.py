@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 import time
 
-from models import BasePredictor
+from base import BasePredictor
 
 
 class MHCflurryPredictor(BasePredictor):
