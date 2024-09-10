@@ -1,7 +1,9 @@
 import pandas as pd
+
 import json
 import argparse
 import enum
+import pathlib
 
 import src
 
@@ -54,6 +56,8 @@ def main(model_name: str):
         for line in f:
             if line.strip() != '' and line[0] != '#':
                 filenames.append(line.strip())
+    
+    pathlib.Path(f'{output_dir}/{model_name}').mkdir(parents=True, exist_ok=True)
 
     for filename in filenames:
         df = pd.read_csv(f'{data_dir}/{filename}')
