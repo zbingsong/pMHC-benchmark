@@ -20,7 +20,7 @@ class MixMHCpredPredictor(BasePredictor):
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
-            cls._executable = configs['exe_path']
+            cls._executable = os.path.expanduser(configs['exe_path'])
 
     @classmethod
     def run(
