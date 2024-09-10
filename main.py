@@ -31,15 +31,6 @@ class Predictors(enum.Enum):
     MHCFLURRY = src.MHCflurryPredictor()
     MIXMHCPRED = src.MixMHCpredPredictor()
     NETMHCPAN = src.NetMHCpanPredictor()
-    DEFAULT = src.BasePredictor()
-
-    @classmethod
-    def _missing_(cls, value: str):
-        if isinstance(value, str):
-            for member in cls:
-                if member.name.lower() == value.lower():
-                    return member
-        return cls.DEFAULT
 
 
 def main(model_name: str):
@@ -49,7 +40,7 @@ def main(model_name: str):
     Parameters:
     model_name (str): name of the model to test
     '''
-    predictor: src.BasePredictor = Predictors(model_name.upper()).value
+    predictor: src.BasePredictor = Predictors[model_name.upper()].value
     predictor.load()
 
     with open('configs.json', 'r') as f:
