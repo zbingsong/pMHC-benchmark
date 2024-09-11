@@ -34,9 +34,10 @@ BEDROC:
 [0.822262,0.839337,0.868994,0.921824,0.94642 ,0.951763]
 std:
 [0.090443,0.091935,0.09615 ,0.109323,0.124445,0.147114]
-Time taken: 33242532965 nanoseconds
+Time taken: 34771192515 nanoseconds
 
 
 Test Regression:
 pearson_corrcoef: 0.412196
 spearman_corrcoef: 0.519314
+overall time: 34962797075 ns

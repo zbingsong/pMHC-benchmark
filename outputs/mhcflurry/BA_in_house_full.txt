@@ -36,3 +36,4 @@ std:
 [nan,nan,nan,nan,nan,nan]
 Time taken: 0 nanoseconds
 
+overall time: 44818062204 ns
