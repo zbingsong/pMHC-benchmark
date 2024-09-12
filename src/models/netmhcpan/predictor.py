@@ -75,8 +75,8 @@ class NetMHCpanPredictor(BasePredictor):
             with open('peptides2.txt', 'w') as file:
                 for peptide in peptides2:
                     file.write(peptide + '\n')
-            process1 = subprocess.Popen([cls._executable, '-p', 'peptides.txt', '-a', mhc_name, '-l', '8,9,10,11,12,13,14', '-BA', '-xls', '-xlsfile', 'out.tsv'])
-            process2 = subprocess.Popen([cls._executable, '-p', 'peptides.txt', '-a', mhc_name, '-l', '8,9,10,11,12,13,14', '-BA', '-xls', '-xlsfile', 'out.tsv'])
+            process1 = subprocess.Popen([cls._executable, '-p', 'peptides1.txt', '-a', mhc_name, '-l', '8,9,10,11,12,13,14', '-BA', '-xls', '-xlsfile', 'out.tsv'])
+            process2 = subprocess.Popen([cls._executable, '-p', 'peptides2.txt', '-a', mhc_name, '-l', '8,9,10,11,12,13,14', '-BA', '-xls', '-xlsfile', 'out.tsv'])
             process1.wait()
             process2.wait()
             assert process1.returncode == 0 and process2.returncode == 0
