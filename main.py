@@ -48,8 +48,6 @@ def main(model_name: str):
     '''
     if model_name.upper() not in Predictors.__members__:
         raise ValueError(f'Invalid model name: {model_name}')
-    
-    start_time = time.time_ns()
 
     predictor: src.BasePredictor = Predictors[model_name.upper()].value
     predictor.load()
@@ -92,10 +90,6 @@ def main(model_name: str):
     for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
         with open(f'{output_dir}/{model_name}/{task}_sensitivity.txt', 'w') as file:
             src.test_sensitivity(prediction_diff, log50k_diff, f'{output_dir}/{model_name}/{task}_sensitivity', file)
-
-    end_time = time.time_ns()
-    with open(f'{output_dir}/{model_name}/time.txt', 'w') as file:
-        file.write(f'Time elapsed: {(end_time - start_time)} ns\n')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
