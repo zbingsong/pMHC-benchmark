@@ -12,8 +12,20 @@ from . import compute_binary_auroc, compute_binary_auprc, compute_auac, compute_
 RETRIEVAL_KS = [1, 5, 10, 25, 50, 100]
 ALPHAS = [0.5, 1, 2, 5, 10, 20]
 
+TEST_CLASSIFICATION_TEMPLATE = '''
+Test classification:
+positives: {}
+totals: {}
+auroc: {:.6f}
+auprc: {:.6f}
+auac: {:.6f}
+bedroc: {:.6f}
+'''
+
 TEST_RETRIEVAL_TEMPLATE = '''
 Test Retrieval by MHC:
+retrieval k: {}
+alphas: {}
 positives: {:.4f} +/- {:.4f}
 totals: {:.4f} +/- {:.4f}
 auroc_by_mhc: {:.6f} +/- {:.6f}
@@ -48,7 +60,7 @@ BEDROC:
 {}
 std:
 {}
-Time taken: {} nanoseconds
+time: {} nanoseconds
 
 '''
 
@@ -64,11 +76,25 @@ spearman_corrcoef: {:.6f}
 '''
 
 
+def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
+    '''
+    Parameters:
+    predictions (torch.FloatTensor): tensor of shape (n, ), containing the cosine similarities between MHC and peptide pairs
+    '''
+    # Plot histogram of test predictions
+    plt.hist(predictions.float(), bins=200, range=(-1, 1))
+    plt.xlabel('EL Score')
+    plt.ylabel('Frequency')
+    plt.savefig(name)
+    plt.close()
+
+
 def test_retrieval(
         predictions: list[torch.DoubleTensor], 
         labels: list[torch.LongTensor], 
         time_taken: int,
-        output_file: io.TextIOWrapper
+        output_file: io.TextIOWrapper,
+        pred_figure_name: str,
 ) -> None:
     n = len(predictions)
     num_positive_peptides = torch.zeros(n, dtype=torch.long)
@@ -86,6 +112,28 @@ def test_retrieval(
     auac_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
     enrichment_factors = torch.zeros(n, len(ALPHAS), dtype=torch.double)
     bedroc_at_ks = torch.zeros(n, len(ALPHAS), dtype=torch.double)
+
+    predictions_all = torch.cat(predictions)
+    labels_all = torch.cat(labels)
+    sorted_indices = torch.argsort(predictions_all, descending=True)
+    sorted_labels = labels_all[sorted_indices]
+    auroc_all = compute_binary_auroc(predictions_all, labels_all)
+    auprc_all = compute_binary_auprc(predictions_all, labels_all)
+    auac_all = compute_auac(sorted_labels, 100.0)
+    bedroc_all = compute_bedroc(sorted_labels, 100.0)
+
+    if output_file is not None:
+        output_file.write(TEST_CLASSIFICATION_TEMPLATE
+            .format(
+                labels_all.sum(),
+                labels_all.size(0),
+                auroc_all,
+                auprc_all,
+                auac_all,
+                bedroc_all
+            )
+        )
+    _plot_similarities(predictions_all, pred_figure_name)
 
     for i, (preds, labs) in enumerate(zip(predictions, labels)):
         sorted_preds, sorted_indices = torch.sort(preds, descending=True)
@@ -111,6 +159,8 @@ def test_retrieval(
 
     if output_file is not None:
         output_file.write(TEST_RETRIEVAL_TEMPLATE.format(
+            RETRIEVAL_KS,
+            ALPHAS,
             num_positive_peptides.mean(),
             num_positive_peptides.std(),
             num_total_peptides.mean(),

@@ -23,10 +23,10 @@ class MixMHCpredPredictor(BasePredictor):
             cls._executable = os.path.expanduser(configs['exe_path'])
 
     @classmethod
-    def run(
+    def run_retrieval(
             cls,
             df: pd.api.typing.DataFrameGroupBy
-    ) -> tuple[tuple[list[torch.DoubleTensor]], list[torch.LongTensor], list[torch.DoubleTensor], int]:
+    ) -> tuple[tuple[tuple[torch.DoubleTensor, ...], torch.LongTensor, int], tuple[tuple[list[torch.DoubleTensor], ...], list[torch.LongTensor], list[torch.DoubleTensor], int]]:
         preds = []
         labels = []
         log50ks = []

@@ -19,16 +19,16 @@ class MHCflurryPredictor(BasePredictor):
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
 
     @classmethod
-    def run(
+    def run_retrieval(
             cls,
-            df: pd.api.typing.DataFrameGroupBy
-    ) -> tuple[tuple[list[torch.DoubleTensor], list[torch.DoubleTensor]], list[torch.LongTensor], list[torch.DoubleTensor], int]:
+            grouped_df: pd.api.typing.DataFrameGroupBy
+    ) -> tuple[tuple[list[torch.DoubleTensor], ...], list[torch.LongTensor], list[torch.DoubleTensor], int]:
         affinity_preds = []
         presentation_preds = []
         labels = []
         log50ks = []
         times = []
-        for mhc_name, group in df:
+        for mhc_name, group in grouped_df:
             group = group.reset_index(drop=True)
             peptides = group['peptide'].tolist()
             try:

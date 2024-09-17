@@ -1,1 +1,1 @@
-from .base_predictor import BasePredictor
+from .predictor import BasePredictor

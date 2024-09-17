@@ -17,7 +17,7 @@ class BasePredictor(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def run(
+    def run_retrieval(
             cls, 
             df: pd.api.typing.DataFrameGroupBy
     ) -> tuple[tuple[list[torch.DoubleTensor], ...], list[torch.LongTensor], list[torch.DoubleTensor], int]:
@@ -31,11 +31,12 @@ class BasePredictor(abc.ABC):
             - 'log50k' (optional): Log50k values.
         
         Returns:
-        tuple[tuple[list[torch.DoubleTensor], ...], list[torch.LongTensor], list[torch.DoubleTensor], int]: 
-            - Tuple of predictions for each task.
-            - List of labels.
-            - List of log50k values.
-            - Total runtime in nanoseconds.
+        tuple[tuple[list[torch.DoubleTensor], ...], list[torch.LongTensor], list[torch.DoubleTensor], int]:
+            - Retrieval result, where metrics are computed per MHC and averaged.
+                - Tuple of predictions for each task, where each prediction is a list of tensors.
+                - List of labels.
+                - List of log50k values.
+                - Total runtime in nanoseconds.
         '''
         raise NotImplementedError
 
@@ -43,13 +44,13 @@ class BasePredictor(abc.ABC):
     @abc.abstractmethod
     def run_sensitivity(
             cls, 
-            df: pd.api.typing.DataFrameGroupBy
+            grouped_df: pd.api.typing.DataFrameGroupBy
     ) -> tuple[tuple[list[torch.DoubleTensor], ...], list[torch.DoubleTensor]]:
         '''
         Run the predictor on the given DataFrameGroupBy for sensitivity analysis.
 
         Parameters:
-        df (pd.api.typing.DataFrameGroupBy): DataFrameGroupBy with the following columns:
+        grouped_df (pd.api.typing.DataFrameGroupBy): DataFrameGroupBy with the following columns:
             - 'peptide1': Peptide sequences.
             - 'peptide2': Peptide sequences.
             - 'label': Binary labels.
