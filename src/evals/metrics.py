@@ -70,7 +70,7 @@ def _compute_rie(
     if n == 0:
         return torch.tensor(0, dtype=torch.double)
     N = sorted_labels.size(0)
-    R_alpha = torch.tensor([n / N], dtype=torch.double)
+    R_alpha = (n / N).to(torch.double)
     positive_ranks = torch.nonzero(sorted_labels).squeeze(1) + 1
     rie = (torch.exp(-alpha * positive_ranks / N)).sum() \
         / (R_alpha * (1 - torch.exp(-alpha)) / (torch.exp(alpha / N) - 1))
@@ -99,8 +99,8 @@ def compute_bedroc(
         return torch.tensor(0, dtype=torch.double)
     elif n == N:
         return torch.tensor(1, dtype=torch.double)
-    R_alpha = torch.tensor([n / N], dtype=torch.double)
-    alpha = torch.tensor([alpha], dtype=torch.double)
+    R_alpha = (n / N).to(torch.double)
+    alpha = torch.tensor(alpha, dtype=torch.double)
     RIE = _compute_rie(sorted_labels, alpha)
     BEDROC = RIE * (R_alpha * torch.sinh(alpha / 2)) / (torch.cosh(alpha / 2) - torch.cosh(alpha / 2 - alpha * R_alpha)) \
         + 1 / (1 - torch.exp(alpha * (1 - R_alpha)))

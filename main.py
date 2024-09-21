@@ -76,8 +76,9 @@ def main(model_name: str):
         predictions, labels, log50ks, time_taken = predictor.run_retrieval(df)
         end_time = time.time_ns()
         for prediction_retr, task in zip(predictions, predictor.tasks):
-            with open(f'{output_dir}/{model_name}/{task}_{filename[:-4]}.txt', 'w') as file:
-                src.test_retrieval(prediction_retr, labels, time_taken, file, f'{output_dir}/{model_name}/{task}_sensitivity.png')
+            name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
+            with open(f'{name}.txt', 'w') as file:
+                src.test_retrieval(prediction_retr, labels, time_taken, file, f'{name}_classification.png')
                 if filename in REG_FILES:
                     src.test_regression(prediction_retr, log50ks, file)
                 file.write(f'overall time: {(end_time - start_time)} ns\n')
