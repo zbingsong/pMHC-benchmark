@@ -16,7 +16,7 @@ class MixMHCpredPredictor(BasePredictor):
 
     @classmethod
     def load(cls) -> None:
-        cls.tasks = ['BA']
+        cls.tasks = ['EL']
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
