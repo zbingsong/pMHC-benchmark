@@ -1,5 +1,15 @@
 
+Test classification:
+positives: 370
+totals: 503
+auroc: 0.823837
+auprc: 0.929065
+auac: 0.904998
+bedroc: 0.999999
+
 Test Retrieval by MHC:
+retrieval k: [1, 5, 10, 25, 50, 100]
+alphas: [0.5, 1, 2, 5, 10, 20]
 positives: 33.6364 +/- 42.4200
 totals: 45.7273 +/- 52.5511
 auroc_by_mhc: 0.867039 +/- 0.079936
@@ -34,10 +44,10 @@ BEDROC:
 [0.876681,0.885874,0.902469,0.935687,0.956697,0.973002]
 std:
 [0.080384,0.082316,0.08902 ,0.109595,0.11248 ,0.081255]
-Time taken: 9646428757 nanoseconds
+time: 10092927452 nanoseconds
 
 
 Test Regression:
 pearson_corrcoef: 0.596153
 spearman_corrcoef: 0.584146
-overall time: 9653025726 ns
+overall time: 10099493783 ns
