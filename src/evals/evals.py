@@ -3,24 +3,14 @@ import torchmetrics.functional.classification
 import torchmetrics.functional.retrieval
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
-import io
-
-from . import compute_binary_auroc, compute_binary_auprc, compute_auac, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef
+from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef
 
 
 RETRIEVAL_KS = [1, 5, 10, 25, 50, 100]
 ALPHAS = [0.5, 1, 2, 5, 10, 20]
-
-TEST_CLASSIFICATION_TEMPLATE = '''
-Test classification:
-positives: {}
-totals: {}
-auroc: {:.6f}
-auprc: {:.6f}
-auac: {:.6f}
-bedroc: {:.6f}
-'''
+PEPTIDE_LENGTHS = [8, 9, 10, 11, 12, 13, 14]
 
 TEST_RETRIEVAL_TEMPLATE = '''
 Test Retrieval by MHC:
@@ -28,15 +18,12 @@ retrieval k: {}
 alphas: {}
 positives: {:.4f} +/- {:.4f}
 totals: {:.4f} +/- {:.4f}
-auroc_by_mhc: {:.6f} +/- {:.6f}
-auprc_by_mhc: {:.6f} +/- {:.6f}
-auac_by_mhc: {:.6f} +/- {:.6f}
-bedrocs_by_mhc: {:.6f} +/- {:.6f}
+Averaged by MHC:
+auroc: {:.6f} +/- {:.6f}
+auprc: {:.6f} +/- {:.6f}
+bedroc: {:.6f} +/- {:.6f}
+Retrieval by MHC:
 precision@k:
-{}
-std:
-{}
-recall@k:
 {}
 std:
 {}
@@ -45,10 +32,6 @@ auroc@k:
 std:
 {}
 auprc@k:
-{}
-std:
-{}
-AUAC@k:
 {}
 std:
 {}
@@ -90,11 +73,10 @@ def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
 
 
 def test_retrieval(
-        predictions: list[torch.DoubleTensor], 
-        labels: list[torch.LongTensor], 
+        predictions: dict[str, dict[str, torch.DoubleTensor]], 
+        labels: dict[str, dict[str, torch.DoubleTensor]], 
         time_taken: int,
-        output_file: io.TextIOWrapper,
-        pred_figure_name: str,
+        output_filename: str,
 ) -> None:
     n = len(predictions)
     num_positive_peptides = torch.zeros(n, dtype=torch.long)
@@ -102,62 +84,87 @@ def test_retrieval(
 
     aurocs = torch.zeros(n, dtype=torch.double)
     auprcs = torch.zeros(n, dtype=torch.double)
-    auacs = torch.zeros(n, dtype=torch.double)
     bedrocs = torch.zeros(n, dtype=torch.double)
     
     precision_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
-    recall_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
     auroc_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
     auprc_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
-    auac_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
     enrichment_factors = torch.zeros(n, len(ALPHAS), dtype=torch.double)
     bedroc_at_ks = torch.zeros(n, len(ALPHAS), dtype=torch.double)
 
+    auroc_df = pd.DataFrame(columns=[predictions.keys()], index=[PEPTIDE_LENGTHS + 'overall_len'], dtype=float)
+    auroc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
+    auprc_df = pd.DataFrame(columns=[predictions.keys()], index=[PEPTIDE_LENGTHS + 'overall_len'], dtype=float)
+    auprc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
+
+    predictions_by_length = {l: [] for l in PEPTIDE_LENGTHS}
+    labels_by_length = {l: [] for l in PEPTIDE_LENGTHS}
+
     predictions_all = torch.cat(predictions)
-    labels_all = torch.cat(labels)
-    sorted_indices = torch.argsort(predictions_all, descending=True)
-    sorted_labels = labels_all[sorted_indices]
-    auroc_all = compute_binary_auroc(predictions_all, labels_all)
-    auprc_all = compute_binary_auprc(predictions_all, labels_all)
-    auac_all = compute_auac(sorted_labels, 100.0)
-    bedroc_all = compute_bedroc(sorted_labels, 100.0)
+    _plot_similarities(predictions_all, f'{output_filename}_predictions.png')
 
-    if output_file is not None:
-        output_file.write(TEST_CLASSIFICATION_TEMPLATE
-            .format(
-                labels_all.sum(),
-                labels_all.size(0),
-                auroc_all,
-                auprc_all,
-                auac_all,
-                bedroc_all
-            )
-        )
-    _plot_similarities(predictions_all, pred_figure_name)
+    for i, mhc_name in enumerate(predictions.keys()):
+        pred_dict = predictions[mhc_name]
+        lab_dict = labels[mhc_name]
 
-    for i, (preds, labs) in enumerate(zip(predictions, labels)):
+        for seq_length in pred_dict.keys():
+            preds = pred_dict[seq_length]
+            labs = lab_dict[seq_length]
+            sorted_preds, sorted_indices = torch.sort(preds, descending=True)
+            sorted_labs = labs[sorted_indices]
+            auroc = compute_binary_auroc(sorted_preds, sorted_labs)
+            auprc = compute_binary_auprc(sorted_preds, sorted_labs)
+            auroc_df.loc[seq_length, mhc_name] = auroc.item()
+            auprc_df.loc[seq_length, mhc_name] = auprc.item()
+            predictions_by_length[seq_length].append(preds)
+            labels_by_length[seq_length].append(labs)
+        
+        preds = torch.cat([pred_dict[seq_length] for seq_length in PEPTIDE_LENGTHS])
+        labs = torch.cat([lab_dict[seq_length] for seq_length in PEPTIDE_LENGTHS])
         sorted_preds, sorted_indices = torch.sort(preds, descending=True)
         sorted_labs = labs[sorted_indices]
-        num_positive_peptides[i] = sorted_labs.sum()
-        num_total_peptides[i] = sorted_labs.size(0)
+
         aurocs[i] = compute_binary_auroc(sorted_preds, sorted_labs)
         auprcs[i] = compute_binary_auprc(sorted_preds, sorted_labs)
-        auacs[i] = compute_auac(sorted_labs, 100.0)
         bedrocs[i] = compute_bedroc(sorted_labs, 100.0)
+        num_positive_peptides[i] = sorted_labs.sum()
+        num_total_peptides[i] = sorted_labs.size(0)
+        auroc_df.loc['overall_len', mhc_name] = aurocs[i].item()
+        auprc_df.loc['overall_len', mhc_name] = auprcs[i].item()
+
         for j, k in enumerate(RETRIEVAL_KS):
             precision_at_ks[i, j] = torchmetrics.functional.retrieval.retrieval_precision(sorted_preds, sorted_labs, top_k=k)
-            recall_at_ks[i, j] = torchmetrics.functional.retrieval.retrieval_recall(sorted_preds, sorted_labs, top_k=k)
             auroc_at_ks[i, j] = compute_retrieval_auroc(sorted_preds, sorted_labs, top_k=k)
             auprc_at_ks[i, j] = compute_retrieval_auprc(sorted_preds, sorted_labs, top_k=k)
         for j, alpha in enumerate(ALPHAS):
-            auac_at_ks[i, j] = compute_auac(sorted_labs, alpha)
-            enrichment_factors[i, j] = compute_ef(sorted_labs, alpha)
-            bedroc_at_ks[i, j] = compute_bedroc(sorted_labs, alpha)
+            enrichment_factors[i, j] = compute_ef(sorted_labs, alpha=alpha)
+            bedroc_at_ks[i, j] = compute_bedroc(sorted_labs, alpha=alpha)
 
     num_positive_peptides = num_positive_peptides.float()
     num_total_peptides = num_total_peptides.float()
 
-    if output_file is not None:
+    for length in PEPTIDE_LENGTHS:
+        if len(predictions_by_length[length]) > 0:
+            preds = torch.cat(predictions_by_length[length])
+            labs = torch.cat(labels_by_length[length])
+            predictions_by_length[length] = preds
+            labels_by_length[length] = labs
+            sorted_preds, sorted_indices = torch.sort(preds, descending=True)
+            sorted_labs = labs[sorted_indices]
+            auroc_df.loc[length, 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
+            auprc_df.loc[length, 'overall_mhc'] = compute_binary_auprc(sorted_preds, sorted_labs).item()
+        else:
+            predictions_by_length[length] = torch.tensor([])
+            labels_by_length[length] = torch.tensor([])
+    
+    total_preds = torch.cat([predictions_by_length[length] for length in PEPTIDE_LENGTHS])
+    total_labs = torch.cat([labels_by_length[length] for length in PEPTIDE_LENGTHS])
+    sorted_preds, sorted_indices = torch.sort(total_preds, descending=True)
+    sorted_labs = total_labs[sorted_indices]
+    auroc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
+    auprc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auprc(sorted_preds, sorted_labs).item()
+
+    with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_RETRIEVAL_TEMPLATE.format(
             RETRIEVAL_KS,
             ALPHAS,
@@ -169,33 +176,30 @@ def test_retrieval(
             aurocs.std(),
             auprcs.mean(),
             auprcs.std(),
-            auacs.mean(),
-            auacs.std(),
             bedrocs.mean(),
             bedrocs.std(),
             np.array2string(precision_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
             np.array2string(precision_at_ks.std(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(recall_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(recall_at_ks.std(dim=0).numpy(), precision=6, separator=','),
             np.array2string(auroc_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
             np.array2string(auroc_at_ks.std(dim=0).numpy(), precision=6, separator=','),
             np.array2string(auprc_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
             np.array2string(auprc_at_ks.std(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(auac_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(auac_at_ks.std(dim=0).numpy(), precision=6, separator=','),
             np.array2string(enrichment_factors.mean(dim=0).numpy(), precision=6, separator=','),
             np.array2string(enrichment_factors.std(dim=0).numpy(), precision=6, separator=','),
             np.array2string(bedroc_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
             np.array2string(bedroc_at_ks.std(dim=0).numpy(), precision=6, separator=','),
             time_taken
         ))
+    
+    auroc_df.to_csv(f'{output_filename}_auroc.csv')
+    auprc_df.to_csv(f'{output_filename}_auprc.csv')
 
 
 def test_sensitivity(
         predictions_diff: torch.DoubleTensor, 
         log50ks_diff: torch.DoubleTensor,
         plot_filename: str,
-        output_file: io.TextIOWrapper,
+        output_filename: str,
 ) -> None:
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
@@ -208,15 +212,16 @@ def test_sensitivity(
     # Treat this as a regression problem
     pearson_corrcoef = torchmetrics.functional.pearson_corrcoef(predictions_diff, log50ks_diff)
     spearman_corrcoef = torchmetrics.functional.spearman_corrcoef(predictions_diff, log50ks_diff)
-
-    output_file.write(TEST_SENSITIVITY_TEMPLATE.format(
-        accuracy, 
-        precision, 
-        recall, 
-        f1_score, 
-        pearson_corrcoef, 
-        spearman_corrcoef
-    ))
+    
+    with open(f'{output_filename}.txt', 'w') as output_file:
+        output_file.write(TEST_SENSITIVITY_TEMPLATE.format(
+            accuracy, 
+            precision, 
+            recall, 
+            f1_score, 
+            pearson_corrcoef, 
+            spearman_corrcoef
+        ))
 
     plt.plot(predictions_diff.numpy(), log50ks_diff.numpy(), '.')
     plt.xlabel('Predicted difference in BA')
@@ -228,8 +233,8 @@ def test_sensitivity(
 def test_regression(
         predictions: list[torch.DoubleTensor], 
         log50ks: list[torch.DoubleTensor], 
-        output_file: io.TextIOWrapper
-) -> tuple[torch.DoubleTensor, torch.DoubleTensor]:
+        output_filename: str,
+) -> None:
     n = len(predictions)
     pearson_corrcoefs = torch.zeros(n, dtype=torch.double)
     spearman_corrcoefs = torch.zeros(n, dtype=torch.double)
@@ -238,12 +243,10 @@ def test_regression(
         pearson_corrcoefs[i] = torchmetrics.functional.pearson_corrcoef(preds, log50k)
         spearman_corrcoefs[i] = torchmetrics.functional.spearman_corrcoef(preds, log50k)
 
-    if output_file is not None:
+    with open(f'{output_filename}.txt', 'a') as output_file:
         output_file.write('\nTest Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'
             .format(
                 pearson_corrcoefs.mean(), 
                 spearman_corrcoefs.mean()
             )
         )
-    
-    return pearson_corrcoefs.mean(), spearman_corrcoefs.mean()

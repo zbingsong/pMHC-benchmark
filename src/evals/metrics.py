@@ -79,7 +79,7 @@ def _compute_rie(
 
 def compute_bedroc(
         sorted_labels: torch.LongTensor,
-        alpha: float=1
+        alpha: float=100
 ) -> torch.DoubleTensor:
     '''
     BEDROC = RIE * \frac{}{}

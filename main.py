@@ -9,9 +9,6 @@ import time
 import src
 
 
-REG_FILES = ('Pearson2016_test.csv', 'Wells2020_ba_test.csv')
-
-
 class Predictors(enum.Enum):
     '''
     Enum class for model functions
@@ -69,28 +66,29 @@ def main(model_name: str):
     for filename in filenames:
         df = pd.read_csv(f'{data_dir}/{filename}')
         df = df.astype({'label': int})
+        if_reg = False
         if 'log50k' in df.columns:
             df = df.astype({'log50k': float})
+            if_reg = True
         df = df.groupby('mhc_name')
-        start_time = time.time_ns()
+        # start_time = time.time_ns()
         predictions, labels, log50ks, time_taken = predictor.run_retrieval(df)
-        end_time = time.time_ns()
-        for prediction_retr, task in zip(predictions, predictor.tasks):
+        # end_time = time.time_ns()
+        for prediction, task in zip(predictions, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
-            with open(f'{name}.txt', 'w') as file:
-                src.test_retrieval(prediction_retr, labels, time_taken, file, f'{name}_classification.png')
-                if filename in REG_FILES:
-                    src.test_regression(prediction_retr, log50ks, file)
-                file.write(f'overall time: {(end_time - start_time)} ns\n')
+            src.test_retrieval(prediction, labels, time_taken, name)
+            if if_reg:
+                src.test_regression(prediction, log50ks, name)
+                # file.write(f'overall time: {(end_time - start_time)} ns\n')
 
     # test sensitivity
-    df = pd.read_csv(f'{data_dir}/pairs.csv')
-    df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
-    df = df.groupby('mhc_name')
-    prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
-    for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
-        with open(f'{output_dir}/{model_name}/{task}_sensitivity.txt', 'w') as file:
-            src.test_sensitivity(prediction_diff, log50k_diff, f'{output_dir}/{model_name}/{task}_sensitivity', file)
+    # df = pd.read_csv(f'{data_dir}/pairs.csv')
+    # df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
+    # df = df.groupby('mhc_name')
+    # prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
+    # for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
+    #     with open(f'{output_dir}/{model_name}/{task}_sensitivity.txt', 'w') as file:
+    #         src.test_sensitivity(prediction_diff, log50k_diff, f'{output_dir}/{model_name}/{task}_sensitivity', file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
