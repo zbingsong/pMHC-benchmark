@@ -155,8 +155,8 @@ def test_retrieval(
             auroc_df.loc[length, 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
             auprc_df.loc[length, 'overall_mhc'] = compute_binary_auprc(sorted_preds, sorted_labs).item()
         else:
-            predictions_by_length[length] = torch.tensor([])
-            labels_by_length[length] = torch.tensor([])
+            predictions_by_length[length] = torch.tensor([], dtype=torch.double)
+            labels_by_length[length] = torch.tensor([], dtype=torch.long)
     
     total_preds = torch.cat([predictions_by_length[length] for length in PEPTIDE_LENGTHS])
     total_labs = torch.cat([labels_by_length[length] for length in PEPTIDE_LENGTHS])
