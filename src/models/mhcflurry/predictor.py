@@ -22,7 +22,7 @@ class MHCflurryPredictor(BasePredictor):
     def run_retrieval(
             cls,
             grouped_df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[list[torch.DoubleTensor], ...], list[torch.LongTensor], list[torch.DoubleTensor], int]:
+    ) -> tuple[tuple[list[torch.DoubleTensor], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         affinity_preds = {}
         presentation_preds = {}
         labels = {}
@@ -64,7 +64,7 @@ class MHCflurryPredictor(BasePredictor):
     def run_sensitivity(
             cls,
             df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[torch.DoubleTensor, torch.DoubleTensor], torch.DoubleTensor]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
         affinity_preds_diff = {}
         presentation_preds_diff = {}
         log50ks_diff = {}

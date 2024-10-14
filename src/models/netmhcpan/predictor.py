@@ -27,7 +27,7 @@ class NetMHCpanPredictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         BA_preds = {}
         EL_preds = {}
         labels = {}

@@ -74,7 +74,7 @@ def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
 
 def test_retrieval(
         predictions: dict[str, dict[str, torch.DoubleTensor]], 
-        labels: dict[str, dict[str, torch.DoubleTensor]], 
+        labels: dict[str, dict[str, torch.LongTensor]], 
         time_taken: int,
         output_filename: str,
 ) -> None:

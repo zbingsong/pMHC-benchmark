@@ -27,7 +27,7 @@ class MixMHCpredPredictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         preds = {}
         labels = {}
         log50ks = {}
@@ -72,7 +72,7 @@ class MixMHCpredPredictor(BasePredictor):
     def run_sensitivity(
             cls,
             df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[torch.DoubleTensor], torch.DoubleTensor]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
         preds_diff = {}
         log50ks_diff = {}
 

@@ -21,7 +21,7 @@ class BasePredictor(abc.ABC):
     def run_retrieval(
             cls, 
             df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         '''
         Run the predictor on the given DataFrameGroupBy.
 
