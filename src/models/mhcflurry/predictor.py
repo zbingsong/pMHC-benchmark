@@ -39,13 +39,9 @@ class MHCflurryPredictor(BasePredictor):
 
             for length, subgroup in grouped_by_len:
                 peptides = subgroup['peptide'].tolist()
-                try:
-                    start_time = time.time_ns()
-                    result_df = cls._predictor.predict(peptides, [mhc_name], verbose=0, include_affinity_percentile=True)
-                    end_time = time.time_ns()
-                except Exception as e:
-                    print(e)
-                    continue  
+                start_time = time.time_ns()
+                result_df = cls._predictor.predict(peptides, [mhc_name], verbose=0, include_affinity_percentile=True)
+                end_time = time.time_ns()
                 affinity_pred[length] = 1 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
                 presentation_pred[length] = torch.tensor(result_df['presentation_score'].tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)

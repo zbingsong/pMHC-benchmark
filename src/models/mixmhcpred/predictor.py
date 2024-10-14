@@ -53,8 +53,9 @@ class MixMHCpredPredictor(BasePredictor):
                 times.append(end_time - start_time)
                 try:
                     result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
-                except:
+                except Exception as e:
                     print(mhc_name, ' failed')
+                    raise e
                 pred[length] = torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
                 if 'log50k' in subgroup.columns:
