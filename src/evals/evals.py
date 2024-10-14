@@ -242,6 +242,8 @@ def test_regression(
     pearson_corrcoefs = torch.zeros(n, dtype=torch.double)
     spearman_corrcoefs = torch.zeros(n, dtype=torch.double)
 
+    print(log50ks)
+
     for i, mhc_name in enumerate(predictions.keys()):
         pred_dict = predictions[mhc_name]
         log50k_dict = log50ks[mhc_name]
