@@ -40,6 +40,10 @@ class MHCflurryPredictor(BasePredictor):
             for length, subgroup in grouped_by_len:
                 peptides = subgroup['peptide'].tolist()
                 start_time = time.time_ns()
+                formatted_mhc_name = mhc_name
+                if mhc_name.startswith('BoLA-'):
+                    # replace the first 0 with *
+                    formatted_mhc_name = mhc_name.replace('0', '*', 1)
                 result_df = cls._predictor.predict(peptides, [mhc_name], verbose=0, include_affinity_percentile=True)
                 end_time = time.time_ns()
                 affinity_pred[length] = 1 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
