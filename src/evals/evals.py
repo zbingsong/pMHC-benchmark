@@ -100,8 +100,7 @@ def test_retrieval(
     predictions_by_length = {l: [] for l in PEPTIDE_LENGTHS}
     labels_by_length = {l: [] for l in PEPTIDE_LENGTHS}
 
-    predictions_all = torch.cat(predictions)
-    _plot_similarities(predictions_all, f'{output_filename}_predictions.png')
+    
 
     for i, mhc_name in enumerate(predictions.keys()):
         pred_dict = predictions[mhc_name]
@@ -163,6 +162,8 @@ def test_retrieval(
     sorted_labs = total_labs[sorted_indices]
     auroc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
     auprc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auprc(sorted_preds, sorted_labs).item()
+
+    _plot_similarities(total_preds, f'{output_filename}_predictions.png')
 
     with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_RETRIEVAL_TEMPLATE.format(
