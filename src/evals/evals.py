@@ -92,9 +92,9 @@ def test_retrieval(
     enrichment_factors = torch.zeros(n, len(ALPHAS), dtype=torch.double)
     bedroc_at_ks = torch.zeros(n, len(ALPHAS), dtype=torch.double)
 
-    auroc_df = pd.DataFrame(columns=[predictions.keys()], index=[PEPTIDE_LENGTHS + 'overall_len'], dtype=float)
+    auroc_df = pd.DataFrame(columns=[predictions.keys()], index=PEPTIDE_LENGTHS + ['overall_len'], dtype=float)
     auroc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
-    auprc_df = pd.DataFrame(columns=[predictions.keys()], index=[PEPTIDE_LENGTHS + 'overall_len'], dtype=float)
+    auprc_df = pd.DataFrame(columns=[predictions.keys()], index=PEPTIDE_LENGTHS + ['overall_len'], dtype=float)
     auprc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
 
     predictions_by_length = {l: [] for l in PEPTIDE_LENGTHS}
