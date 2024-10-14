@@ -100,15 +100,17 @@ def test_retrieval(
     predictions_by_length = {l: [] for l in PEPTIDE_LENGTHS}
     labels_by_length = {l: [] for l in PEPTIDE_LENGTHS}
 
-    
-
     for i, mhc_name in enumerate(predictions.keys()):
         pred_dict = predictions[mhc_name]
         lab_dict = labels[mhc_name]
+        preds_list = []
+        labs_list = []
 
         for seq_length in pred_dict.keys():
             preds = pred_dict[seq_length]
             labs = lab_dict[seq_length]
+            preds_list.append(preds)
+            labs_list.append(labs)
             sorted_preds, sorted_indices = torch.sort(preds, descending=True)
             sorted_labs = labs[sorted_indices]
             auroc = compute_binary_auroc(sorted_preds, sorted_labs)
@@ -118,8 +120,8 @@ def test_retrieval(
             predictions_by_length[seq_length].append(preds)
             labels_by_length[seq_length].append(labs)
         
-        preds = torch.cat([pred_dict[seq_length] for seq_length in PEPTIDE_LENGTHS])
-        labs = torch.cat([lab_dict[seq_length] for seq_length in PEPTIDE_LENGTHS])
+        preds = torch.cat(preds_list)
+        labs = torch.cat(labs_list)
         sorted_preds, sorted_indices = torch.sort(preds, descending=True)
         sorted_labs = labs[sorted_indices]
 
