@@ -199,8 +199,8 @@ def test_retrieval(
 
 
 def test_sensitivity(
-        predictions_diff: torch.DoubleTensor, 
-        log50ks_diff: torch.DoubleTensor,
+        predictions_diff: dict[str, dict[str, torch.DoubleTensor]], 
+        log50ks_diff: dict[str, dict[str, torch.DoubleTensor]],
         plot_filename: str,
         output_filename: str,
 ) -> None:
@@ -234,17 +234,22 @@ def test_sensitivity(
 
 
 def test_regression(
-        predictions: list[torch.DoubleTensor], 
-        log50ks: list[torch.DoubleTensor], 
+        predictions: dict[str, dict[str, torch.DoubleTensor]], 
+        log50ks: dict[str, dict[str, torch.DoubleTensor]], 
         output_filename: str,
 ) -> None:
     n = len(predictions)
     pearson_corrcoefs = torch.zeros(n, dtype=torch.double)
     spearman_corrcoefs = torch.zeros(n, dtype=torch.double)
 
-    for i, (preds, log50k) in enumerate(zip(predictions, log50ks)):
-        pearson_corrcoefs[i] = torchmetrics.functional.pearson_corrcoef(preds, log50k)
-        spearman_corrcoefs[i] = torchmetrics.functional.spearman_corrcoef(preds, log50k)
+    for i, mhc_name in enumerate(predictions.keys()):
+        pred_dict = predictions[mhc_name]
+        log50k_dict = log50ks[mhc_name]
+        lengths = pred_dict.keys()
+        preds = torch.cat([pred_dict[length] for length in lengths])
+        log50ks = torch.cat([log50k_dict[length] for length in lengths])
+        pearson_corrcoefs[i] = torchmetrics.functional.pearson_corrcoef(preds, log50ks)
+        spearman_corrcoefs[i] = torchmetrics.functional.spearman_corrcoef(preds, log50ks)
 
     with open(f'{output_filename}.txt', 'a') as output_file:
         output_file.write('\nTest Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'
