@@ -242,16 +242,14 @@ def test_regression(
     pearson_corrcoefs = torch.zeros(n, dtype=torch.double)
     spearman_corrcoefs = torch.zeros(n, dtype=torch.double)
 
-    print(log50ks)
-
     for i, mhc_name in enumerate(predictions.keys()):
         pred_dict = predictions[mhc_name]
         log50k_dict = log50ks[mhc_name]
         lengths = pred_dict.keys()
         preds = torch.cat([pred_dict[length] for length in lengths])
-        log50ks = torch.cat([log50k_dict[length] for length in lengths])
-        pearson_corrcoefs[i] = torchmetrics.functional.pearson_corrcoef(preds, log50ks)
-        spearman_corrcoefs[i] = torchmetrics.functional.spearman_corrcoef(preds, log50ks)
+        logs = torch.cat([log50k_dict[length] for length in lengths])
+        pearson_corrcoefs[i] = torchmetrics.functional.pearson_corrcoef(preds, logs)
+        spearman_corrcoefs[i] = torchmetrics.functional.spearman_corrcoef(preds, logs)
 
     with open(f'{output_filename}.txt', 'a') as output_file:
         output_file.write('\nTest Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'

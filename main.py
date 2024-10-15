@@ -79,7 +79,6 @@ def main(model_name: str):
             src.test_retrieval(prediction, labels, time_taken, name)
             if if_reg:
                 src.test_regression(prediction, log50ks, name)
-                # file.write(f'overall time: {(end_time - start_time)} ns\n')
 
     # test sensitivity
     # df = pd.read_csv(f'{data_dir}/pairs.csv')
