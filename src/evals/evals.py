@@ -204,6 +204,16 @@ def test_sensitivity(
         plot_filename: str,
         output_filename: str,
 ) -> None:
+    preds = []
+    logs = []
+    for mhc_name in predictions_diff.keys():
+        pred_dict = predictions_diff[mhc_name]
+        log_dict = log50ks_diff[mhc_name]
+        for length in pred_dict.keys():
+            preds.append(pred_dict[length])
+            logs.append(log_dict[length])
+    predictions_diff = torch.cat(preds)
+    log50ks_diff = torch.cat(logs)
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
     binary_log50ks_diff = (log50ks_diff > 0).int()
