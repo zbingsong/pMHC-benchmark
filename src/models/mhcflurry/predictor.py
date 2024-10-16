@@ -6,8 +6,21 @@ import time
 import json
 import os
 import pathlib
+import sys
+import io
 
 from . import BasePredictor
+
+
+class SuppressStdout:
+    def __init__(self):
+        self.original_stdout = sys.stdout
+
+    def __enter__(self):
+        sys.stdout = io.StringIO()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        sys.stdout = self.original_stdout
 
 
 class MHCflurryPredictor(BasePredictor):
@@ -61,7 +74,8 @@ class MHCflurryPredictor(BasePredictor):
                     formatted_mhc_name = mhc_name.replace('0', '*', 1)
 
                 start_time = time.time_ns()
-                result_df = cls._predictor.predict(peptides, [formatted_mhc_name], verbose=0, include_affinity_percentile=True)
+                with SuppressStdout():
+                    result_df = cls._predictor.predict(peptides, [formatted_mhc_name], verbose=0, include_affinity_percentile=True)
                 end_time = time.time_ns()
 
                 affinity_pred[length] = 1 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
