@@ -53,6 +53,7 @@ def main(model_name: str):
     with open('configs.json', 'r') as f:
         configs = json.load(f)
         filelist_path = configs['filelist_path']
+        filelist_sensitivity_path = configs['filelist_sensitivity_path']
         data_dir = configs['data_dir']
         output_dir = configs['output_dir']
 
@@ -61,6 +62,12 @@ def main(model_name: str):
         for line in f:
             if line.strip() != '' and line[0] != '#':
                 filenames.append(line.strip())
+    
+    filenames_sensitivity = []
+    with open(filelist_sensitivity_path, 'r') as f:
+        for line in f:
+            if line.strip() != '' and line[0] != '#':
+                filenames_sensitivity.append(line.strip())
     
     pathlib.Path(f'{output_dir}/{model_name}').mkdir(parents=True, exist_ok=True)
 
@@ -82,13 +89,14 @@ def main(model_name: str):
                 src.test_regression(prediction, log50ks, name)
 
     # test sensitivity
-    df = pd.read_csv(f'{data_dir}/pairs.csv')
-    df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
-    df = df.groupby('mhc_name')
-    prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
-    for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
-        name = f'{output_dir}/{model_name}/{task}_sensitivity'
-        src.test_sensitivity(prediction_diff, log50k_diff, name)
+    for filename in filenames_sensitivity:
+        df = pd.read_csv(f'{data_dir}/{filename}')
+        df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
+        df = df.groupby('mhc_name')
+        prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
+        for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
+            name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
+            src.test_sensitivity(prediction_diff, log50k_diff, name)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
