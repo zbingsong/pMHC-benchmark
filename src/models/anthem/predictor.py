@@ -15,6 +15,7 @@ from . import BasePredictor
 class AnthemPredictor(BasePredictor):
     tasks = None
     _exe_dir = None
+    _unknown_mhc = None
 
     @classmethod
     def load(cls) -> None:
@@ -22,7 +23,8 @@ class AnthemPredictor(BasePredictor):
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
-            cls._exe_dir = os.path.expanduser(configs['exe_dir']) # list of strings
+            cls._exe_dir = os.path.expanduser(configs['exe_dir'])
+            cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
 
     @classmethod
     def run_retrieval(
@@ -35,6 +37,13 @@ class AnthemPredictor(BasePredictor):
         times = []
 
         for mhc_name, group in df:
+            if not mhc_name.startswith('HLA-'):
+                print(f'Unknown MHC name: {mhc_name}')
+                if cls._unknown_mhc == 'ignore':
+                    continue
+                elif cls._unknown_mhc == 'error':
+                    raise ValueError(f'Unknown MHC name: {mhc_name}')
+                
             pred = {}
             label = {}
             log50k = {}
