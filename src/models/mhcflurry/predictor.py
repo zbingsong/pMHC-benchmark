@@ -3,6 +3,9 @@ import pandas.api.typing as pd_typing
 import torch
 
 import time
+import json
+import os
+import pathlib
 
 from . import BasePredictor
 
@@ -11,12 +14,17 @@ class MHCflurryPredictor(BasePredictor):
     tasks = None
     _predictor = None
     _log50k_base = None
+    _unknown_peptide = None
 
     @classmethod
     def load(cls) -> None:
         cls.tasks = ['EL', 'BA']
         cls._predictor = Class1PresentationPredictor.load()
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
+        curr_dir = pathlib.Path(__file__).parent
+        with open(f'{curr_dir}/configs.json', 'r') as f:
+            configs = json.load(f)
+            cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
     @classmethod
     def run_retrieval(
@@ -38,14 +46,24 @@ class MHCflurryPredictor(BasePredictor):
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             for length, subgroup in grouped_by_len:
+                if subgroup['peptide'].str.contains('X').any():
+                    if cls._unknown_peptide == 'ignore':
+                        subgroup = subgroup[~subgroup['peptide'].str.contains('X')]
+                        if subgroup.empty:
+                            continue
+                    elif cls._unknown_peptide == 'error':
+                        raise ValueError(f'Unknown peptides: {subgroup[~subgroup['peptide'].str.contains('X')]['peptide'].tolist()}')
+                    
                 peptides = subgroup['peptide'].tolist()
-                start_time = time.time_ns()
                 formatted_mhc_name = mhc_name
                 if mhc_name.startswith('BoLA-'):
                     # replace the first 0 with *
                     formatted_mhc_name = mhc_name.replace('0', '*', 1)
+
+                start_time = time.time_ns()
                 result_df = cls._predictor.predict(peptides, [formatted_mhc_name], verbose=0, include_affinity_percentile=True)
                 end_time = time.time_ns()
+
                 affinity_pred[length] = 1 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
                 presentation_pred[length] = torch.tensor(result_df['presentation_score'].tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
