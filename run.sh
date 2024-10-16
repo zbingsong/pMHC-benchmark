@@ -2,7 +2,7 @@
 
 MODEL_NAME="${1:-default}"
 echo "Test model: $MODEL_NAME"
-SCREEN_NAME="bz_pmhc_benchmark_$MODEL_NAME"
+SCREEN_NAME="pmhc_benchmark_$MODEL_NAME"
 
 echo "Job started"
 screen -dmS "$SCREEN_NAME"
