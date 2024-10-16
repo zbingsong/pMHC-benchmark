@@ -201,9 +201,18 @@ def test_retrieval(
 def test_sensitivity(
         predictions_diff: dict[str, dict[str, torch.DoubleTensor]], 
         log50ks_diff: dict[str, dict[str, torch.DoubleTensor]],
-        plot_filename: str,
         output_filename: str,
 ) -> None:
+    preds = []
+    logs = []
+    for mhc_name in predictions_diff.keys():
+        pred_dict = predictions_diff[mhc_name]
+        log_dict = log50ks_diff[mhc_name]
+        for length in pred_dict.keys():
+            preds.append(pred_dict[length])
+            logs.append(log_dict[length])
+    predictions_diff = torch.cat(preds)
+    log50ks_diff = torch.cat(logs)
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
     binary_log50ks_diff = (log50ks_diff > 0).int()
@@ -229,7 +238,7 @@ def test_sensitivity(
     plt.plot(predictions_diff.numpy(), log50ks_diff.numpy(), '.')
     plt.xlabel('Predicted difference in BA')
     plt.ylabel('Measured difference in BA log50k')
-    plt.savefig(f'{plot_filename}.png')
+    plt.savefig(f'{output_filename}.png')
     plt.close()
 
 

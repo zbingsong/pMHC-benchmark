@@ -1,5 +1,5 @@
 import pandas as pd
-import pandas.api.typing as pd_typing
+import pandas.core.groupby.generic as pd_typing
 import torch
 
 import subprocess
@@ -48,7 +48,7 @@ class NetMHCpanPredictor(BasePredictor):
                     for peptide in peptides:
                         file.write(peptide + '\n')
                 start_time = time.time_ns()
-                run_result = subprocess.run([cls._executable, '-p', 'peptides.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out.tsv'])
+                run_result = subprocess.run([cls._executable, '-p', 'peptides.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out.tsv'], stdout=subprocess.DEVNULL)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
                 result_df = pd.read_csv('out.tsv', sep='\t', skiprows=[0])
