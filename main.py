@@ -4,7 +4,6 @@ import json
 import argparse
 import enum
 import pathlib
-import time
 
 import src
 
@@ -34,6 +33,7 @@ class Predictors(enum.Enum):
     MHCFLURRY = src.MHCflurryPredictor()
     MIXMHCPRED = src.MixMHCpredPredictor()
     NETMHCPAN = src.NetMHCpanPredictor()
+    ANTHEM = src.AnthemPredictor()
 
 
 def main(model_name: str):
