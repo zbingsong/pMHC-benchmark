@@ -46,7 +46,7 @@ class MixMHCpredPredictor(BasePredictor):
             pred = {}
             label = {}
             log50k = {}
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]*', regex=True)].reset_index(drop=True)
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
             if len(group) == 0:
                 continue
             grouped_by_len = group.groupby(group['peptide'].str.len())
