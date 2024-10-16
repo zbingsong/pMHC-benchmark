@@ -201,7 +201,6 @@ def test_retrieval(
 def test_sensitivity(
         predictions_diff: dict[str, dict[str, torch.DoubleTensor]], 
         log50ks_diff: dict[str, dict[str, torch.DoubleTensor]],
-        plot_filename: str,
         output_filename: str,
 ) -> None:
     preds = []
@@ -239,7 +238,7 @@ def test_sensitivity(
     plt.plot(predictions_diff.numpy(), log50ks_diff.numpy(), '.')
     plt.xlabel('Predicted difference in BA')
     plt.ylabel('Measured difference in BA log50k')
-    plt.savefig(f'{plot_filename}.png')
+    plt.savefig(f'{output_filename}.png')
     plt.close()
 
 
