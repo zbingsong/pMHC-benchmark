@@ -48,6 +48,7 @@ class MixMHCpredPredictor(BasePredictor):
             log50k = {}
             group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
             if len(group) == 0:
+                print(f'No valid peptides for {mhc_name}')
                 continue
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
