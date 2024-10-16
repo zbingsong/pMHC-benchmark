@@ -1,2 +1,2 @@
 from ..base import BasePredictor
-from . import AnthemPredictor
+from .predictor import AnthemPredictor

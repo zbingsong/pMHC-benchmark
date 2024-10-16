@@ -61,7 +61,15 @@ class AnthemPredictor(BasePredictor):
                 start_time = time.time_ns()
                 run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--length', str(length), '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
-                assert run_result.returncode == 0
+
+                try:
+                    assert run_result.returncode == 0
+                except Exception as e:
+                    print(f'Error running Anthem for {mhc_name} with length {length}')
+                    if cls._unknown_mhc == 'ignore':
+                        continue
+                    elif cls._unknown_mhc == 'error':
+                        raise e
                 times.append(end_time - start_time)
 
                 # Anthem creates a new directory for each run, so we need to find the result file
@@ -73,10 +81,12 @@ class AnthemPredictor(BasePredictor):
                             f.readline()
                         result = []
                         for line in f:
+                            line = line.strip()
                             if line.startswith('-'):
                                 break
-                            cells = line.strip().split()
+                            cells = line.split()
                             result.append(float(cells[-1]))
+                        assert len(result) == len(subgroup), f'Length mismatch: {len(result)} vs {len(subgroup)} for {mhc_name} with length {length}'
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e
@@ -109,13 +119,9 @@ class AnthemPredictor(BasePredictor):
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
             for length, subgroup in grouped_by_len:
-                peptides1 = subgroup['peptide1'].tolist()
-                peptides2 = subgroup['peptide2'].tolist()
                 with open(f'peptides.txt', 'w') as f:
-                    for peptide in peptides1:
-                        f.write(f'{peptide}\n')
-                    for peptide in peptides2:
-                        f.write(f'{peptide}\n')
+                    for row in subgroup.itertuples():
+                        f.write(f'{row.peptide1}\n{row.peptide2}\n')
                 mhc_formatted = mhc_name[:5] + '*' + mhc_name[5:]
                 wd = os.getcwd()
 
@@ -131,9 +137,10 @@ class AnthemPredictor(BasePredictor):
                             f.readline()
                         result = []
                         for line in f:
+                            line = line.strip()
                             if line.startswith('-'):
                                 break
-                            cells = line.strip().split()
+                            cells = line.split()
                             result.append(float(cells[-1]))
                 except Exception as e:
                     print(mhc_name, ' failed')
