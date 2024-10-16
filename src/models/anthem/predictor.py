@@ -1,4 +1,4 @@
-import pandas.api.typing as pd_typing
+import pandas.core.groupby.generic as pd_typing
 import torch
 
 import os
