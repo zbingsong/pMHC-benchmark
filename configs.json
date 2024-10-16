@@ -1,5 +1,5 @@
 {
     "filelist_path": "files.txt",
-    "data_dir": "../data_pmhc/benchmark",
+    "data_dir": "/data/bingsong/data_pmhc/benchmark",
     "output_dir": "outputs"
 }
