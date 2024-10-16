@@ -74,8 +74,9 @@ class MixMHCpredPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        os.remove('peptides.fasta')
-        os.remove('result.tsv')
+        if os.path.exists('peptides.fasta'):
+            os.remove('peptides.fasta')
+            os.remove('result.tsv')
         return (preds,), labels, log50ks, sum(times)
             
     @classmethod
