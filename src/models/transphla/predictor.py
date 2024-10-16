@@ -52,13 +52,14 @@ class TransPHLAPredictor(BasePredictor):
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             for length, subgroup in grouped_by_len:
-                if subgroup['peptide'].str.len().max() >= 15:
+                if length >= 15:
                     if cls._unknown_peptide == 'ignore':
                         subgroup = subgroup[subgroup['peptide'].str.len() < 15]
                         if subgroup.empty:
                             continue
                     elif cls._unknown_peptide == 'error':
-                        raise ValueError(f'Unknown peptides: {subgroup[subgroup['peptide'].str.len() >= 15]["peptide"].tolist()}')
+                        bad_peptides = subgroup['peptide'].tolist()
+                        raise ValueError(f'Unknown peptides: {bad_peptides}')
                     
                 with open('mhcs.fasta', 'w') as mhc_f, open('peptides.fasta', 'w') as peptide_f:
                     for row in subgroup.itertuples():
