@@ -34,6 +34,7 @@ class Predictors(enum.Enum):
     MIXMHCPRED = src.MixMHCpredPredictor()
     NETMHCPAN = src.NetMHCpanPredictor()
     ANTHEM = src.AnthemPredictor()
+    TRANSPHLA = src.TransPHLAPredictor()
 
 
 def main(model_name: str):
