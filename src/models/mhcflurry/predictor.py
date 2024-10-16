@@ -65,7 +65,8 @@ class MHCflurryPredictor(BasePredictor):
                         if subgroup.empty:
                             continue
                     elif cls._unknown_peptide == 'error':
-                        raise ValueError(f'Unknown peptides: {subgroup[~subgroup['peptide'].str.contains('X')]['peptide'].tolist()}')
+                        bad_peptides = subgroup[subgroup['peptide'].str.contains('X')]['peptide'].tolist()
+                        raise ValueError(f'Unknown peptides: {bad_peptides}')
                     
                 peptides = subgroup['peptide'].tolist()
                 formatted_mhc_name = mhc_name
