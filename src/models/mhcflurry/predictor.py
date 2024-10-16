@@ -28,12 +28,14 @@ class MHCflurryPredictor(BasePredictor):
     _predictor = None
     _log50k_base = None
     _unknown_peptide = None
+    _exclude_mhcs = None
 
     @classmethod
     def load(cls) -> None:
         cls.tasks = ['EL', 'BA']
         cls._predictor = Class1PresentationPredictor.load()
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
+        cls._exclude_mhcs = {'H2-Q7'}
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
@@ -51,6 +53,9 @@ class MHCflurryPredictor(BasePredictor):
         times = []
 
         for mhc_name, group in grouped_df:
+            if mhc_name in cls._exclude_mhcs:
+                continue
+            
             affinity_pred = {}
             presentation_pred = {}
             label = {}
