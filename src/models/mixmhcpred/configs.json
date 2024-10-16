@@ -1,3 +1,4 @@
 {
-    "exe_path": "~/repo/MixMHCpred/MixMHCpred"
+    "exe_path": "~/repo/MixMHCpred/MixMHCpred",
+    "unknown_mhc": "ignore"
 }
