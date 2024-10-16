@@ -54,6 +54,7 @@ class MHCflurryPredictor(BasePredictor):
 
         for mhc_name, group in grouped_df:
             if mhc_name in cls._exclude_mhcs:
+                print(f'Excluded MHC: {mhc_name}')
                 continue
 
             affinity_pred = {}
