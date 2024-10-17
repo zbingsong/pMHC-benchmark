@@ -1,0 +1,33 @@
+
+Test Retrieval by MHC:
+retrieval k: [1, 5, 10, 25, 50, 100]
+alphas: [0.5, 1, 2, 5, 10, 20]
+positives: nan +/- nan
+totals: nan +/- nan
+Averaged by MHC:
+auroc: nan +/- nan
+auprc: nan +/- nan
+bedroc: nan +/- nan
+Retrieval by MHC:
+precision@k:
+[nan,nan,nan,nan,nan,nan]
+std:
+[nan,nan,nan,nan,nan,nan]
+auroc@k:
+[nan,nan,nan,nan,nan,nan]
+std:
+[nan,nan,nan,nan,nan,nan]
+auprc@k:
+[nan,nan,nan,nan,nan,nan]
+std:
+[nan,nan,nan,nan,nan,nan]
+enrichment_factors:
+[nan,nan,nan,nan,nan,nan]
+std:
+[nan,nan,nan,nan,nan,nan]
+BEDROC:
+[nan,nan,nan,nan,nan,nan]
+std:
+[nan,nan,nan,nan,nan,nan]
+time: 0 nanoseconds
+
