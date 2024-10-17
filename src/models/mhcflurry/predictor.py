@@ -35,7 +35,7 @@ class MHCflurryPredictor(BasePredictor):
         cls.tasks = ['EL', 'BA']
         cls._predictor = Class1PresentationPredictor.load()
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
-        cls._exclude_mhcs = {'H2-Q7'}
+        cls._exclude_mhcs = {'H2-Qa2', 'Mamu-A11'}
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
@@ -56,24 +56,18 @@ class MHCflurryPredictor(BasePredictor):
             if mhc_name in cls._exclude_mhcs:
                 print(f'Excluded MHC: {mhc_name}')
                 continue
+            else:
+                print(f'Predicting for MHC: {mhc_name}')
 
             affinity_pred = {}
             presentation_pred = {}
             label = {}
             log50k = {}
             group = group.reset_index(drop=True)
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
-            for length, subgroup in grouped_by_len:
-                if subgroup['peptide'].str.contains('X').any():
-                    if cls._unknown_peptide == 'ignore':
-                        subgroup = subgroup[~subgroup['peptide'].str.contains('X')]
-                        if subgroup.empty:
-                            continue
-                    elif cls._unknown_peptide == 'error':
-                        bad_peptides = subgroup[subgroup['peptide'].str.contains('X')]['peptide'].tolist()
-                        raise ValueError(f'Unknown peptides: {bad_peptides}')
-                    
+            for length, subgroup in grouped_by_len:                  
                 peptides = subgroup['peptide'].tolist()
                 formatted_mhc_name = mhc_name
                 if mhc_name.startswith('BoLA-'):
