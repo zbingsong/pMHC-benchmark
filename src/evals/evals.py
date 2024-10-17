@@ -78,6 +78,8 @@ def test_retrieval(
         time_taken: int,
         output_filename: str,
 ) -> None:
+    # if predictions of an mhc is empty, drop it
+    predictions = {k: v for k, v in predictions.items() if len(v) > 0}
     n = len(predictions)
     num_positive_peptides = torch.zeros(n, dtype=torch.long)
     num_total_peptides = torch.zeros(n, dtype=torch.long)
