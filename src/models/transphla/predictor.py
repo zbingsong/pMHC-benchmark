@@ -50,6 +50,9 @@ class TransPHLAPredictor(BasePredictor):
             log50k = {}
             # peptide should contain none of B, J, O, U, X, Z
             group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            if len(group) == 0:
+                print(f'No valid peptides for {mhc_name}')
+                continue
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             for length, subgroup in grouped_by_len:
@@ -112,6 +115,9 @@ class TransPHLAPredictor(BasePredictor):
             pred_diff = {}
             log50k_diff = {}
             group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            if len(group) == 0:
+                print(f'No valid peptides for {mhc_name}')
+                continue
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
             for length, subgroup in grouped_by_len:

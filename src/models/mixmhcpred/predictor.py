@@ -46,6 +46,7 @@ class MixMHCpredPredictor(BasePredictor):
             pred = {}
             label = {}
             log50k = {}
+            # peptide should contain none of B, J, O, U, X, Z
             group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
@@ -92,9 +93,19 @@ class MixMHCpredPredictor(BasePredictor):
         log50ks_diff = {}
 
         for mhc_name, group in df:
+            if not mhc_name.startswith('HLA-'):
+                print(f'Unknown MHC name: {mhc_name}')
+                if cls._unknown_mhc == 'ignore':
+                    continue
+                elif cls._unknown_mhc == 'error':
+                    raise ValueError(f'Unknown MHC name: {mhc_name}')
+                
             pred_diff = {}
             log50k_diff = {}
-            group = group.reset_index(drop=True)
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            if len(group) == 0:
+                print(f'No valid peptides for {mhc_name}')
+                continue
             grouped_by_len = group.groupby(group['peptide1'].str.len())
             mhc_formatted = mhc_name[4:].replace(':', '')
 
