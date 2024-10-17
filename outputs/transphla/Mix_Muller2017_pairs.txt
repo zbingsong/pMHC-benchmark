@@ -1,0 +1,9 @@
+
+Test Sensitivity:
+accuracy: 0.6842
+precision: 0.5000
+recall: 0.4167
+f1_score: 0.4545
+pearson_corrcoef: 0.788251
+spearman_corrcoef: 0.650336
+
