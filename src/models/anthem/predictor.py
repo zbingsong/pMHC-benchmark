@@ -16,6 +16,7 @@ class AnthemPredictor(BasePredictor):
     tasks = None
     _exe_dir = None
     _unknown_mhc = None
+    _unknown_peptide = None
 
     @classmethod
     def load(cls) -> None:
@@ -25,6 +26,7 @@ class AnthemPredictor(BasePredictor):
             configs = json.load(f)
             cls._exe_dir = os.path.expanduser(configs['exe_dir'])
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
+            cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
     @classmethod
     def run_retrieval(
@@ -50,22 +52,29 @@ class AnthemPredictor(BasePredictor):
             group = group.reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
+            mhc_formatted = mhc_name
+            if ':' not in mhc_name:
+                mhc_formatted = mhc_name[:-2] + ':' + mhc_name[-2:]
+            if '*' not in mhc_name:
+                mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
+
             for length, subgroup in grouped_by_len:
+                # peptide should contain none of B, J, O, U, X, Z
+                subgroup = subgroup[~subgroup['peptide'].str.contains(r'[^BJOUXZ]*', regex=True)]
                 peptides = subgroup['peptide'].tolist()
                 with open('peptides.txt', 'w') as f:
                     for peptide in peptides:
                         f.write(f'{peptide}\n')
-                mhc_formatted = mhc_name[:5] + '*' + mhc_name[5:]
                 wd = os.getcwd()
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--length', str(length), '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
 
                 try:
                     assert run_result.returncode == 0
                 except Exception as e:
-                    print(f'Error running Anthem for {mhc_name} with length {length}')
+                    print(f'Error running Anthem for {mhc_formatted} with length {length}')
                     if cls._unknown_mhc == 'ignore':
                         continue
                     elif cls._unknown_mhc == 'error':
@@ -117,12 +126,14 @@ class AnthemPredictor(BasePredictor):
             log50k_diff = {}
             group = group.reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide1'].str.len())
+            if ':' not in mhc_name:
+                mhc_formatted = mhc_name[:-2] + ':' + mhc_name[-2:]
+            mhc_formatted = mhc_name[:5] + '*' + mhc_name[5:]
 
             for length, subgroup in grouped_by_len:
                 with open(f'peptides.txt', 'w') as f:
                     for row in subgroup.itertuples():
                         f.write(f'{row.peptide1}\n{row.peptide2}\n')
-                mhc_formatted = mhc_name[:5] + '*' + mhc_name[5:]
                 wd = os.getcwd()
 
                 run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--length', str(length), '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)

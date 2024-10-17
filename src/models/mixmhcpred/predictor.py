@@ -48,13 +48,14 @@ class MixMHCpredPredictor(BasePredictor):
             log50k = {}
             group = group.reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide'].str.len())
+            mhc_formatted = mhc_name[4:].replace(':', '')
 
             for length, subgroup in grouped_by_len:
                 peptides = subgroup['peptide'].tolist()
                 with open(f'peptides.fasta', 'w') as f:
                     for peptide in peptides:
                         f.write(f'>{peptide}\n{peptide}\n')
-                mhc_formatted = mhc_name[4:].replace(':', '')
+                        
                 start_time = time.time_ns()
                 run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
                 end_time = time.time_ns()
@@ -91,13 +92,14 @@ class MixMHCpredPredictor(BasePredictor):
             log50k_diff = {}
             group = group.reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide1'].str.len())
+            mhc_formatted = mhc_name[4:].replace(':', '')
 
             for length, subgroup in grouped_by_len:
                 peptides1 = subgroup['peptide1'].tolist()
                 with open(f'peptides.fasta', 'w') as f:
                     for peptide in peptides1:
                         f.write(f'>{peptide}\n{peptide}\n')
-                mhc_formatted = mhc_name[4:].replace(':', '')
+
                 run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
                 assert run_result.returncode == 0
                 result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))

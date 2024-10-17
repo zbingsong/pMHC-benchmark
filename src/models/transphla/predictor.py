@@ -52,22 +52,22 @@ class TransPHLAPredictor(BasePredictor):
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             for length, subgroup in grouped_by_len:
-                if subgroup['peptide'].str.len().max() >= 15:
+                if length >= 15:
                     if cls._unknown_peptide == 'ignore':
-                        subgroup = subgroup[subgroup['peptide'].str.len() < 15]
-                        if subgroup.empty:
-                            continue
+                        continue
                     elif cls._unknown_peptide == 'error':
-                        raise ValueError(f'Unknown peptides: {subgroup[subgroup['peptide'].str.len() >= 15]["peptide"].tolist()}')
+                        raise ValueError(f'Peptide for {mhc_name} is too long: {length}')
+                
+                print(f'Running {mhc_name} with {length} length peptides, number of peptides: {len(subgroup)}')
                     
                 with open('mhcs.fasta', 'w') as mhc_f, open('peptides.fasta', 'w') as peptide_f:
                     for row in subgroup.itertuples():
-                        mhc_f.write(f'>{row.Index}\n{row.mhc}\n')
+                        mhc_f.write(f'>{row.Index}\n{row.mhc_name}\n')
                         peptide_f.write(f'>{row.Index}\n{row.peptide}\n')
                 wd = os.getcwd()
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{wd}/peptides.fasta', '--HLA_file', f'{wd}/mhcs.fasta', '--threshold', '0.5', '--cut_peptide', 'False', '--output_dir', 'results', '--output_attention', 'False', '--output_heatmap', 'True', '--output_mutation', 'True'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{wd}/peptides.fasta', '--HLA_file', f'{wd}/mhcs.fasta', '--threshold', '0.5', '--cut_peptide', 'False', '--output_dir', 'results', '--output_attention', 'False', '--output_heatmap', 'True', '--output_mutation', 'True'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
                 times.append(end_time - start_time)
@@ -107,7 +107,7 @@ class TransPHLAPredictor(BasePredictor):
             for length, subgroup in grouped_by_len:
                 with open('mhcs.fasta', 'w') as mhc_f, open('peptides.fasta', 'w') as peptide_f:
                     for row in subgroup.itertuples():
-                        mhc_f.write(f'>{row.Index}\n{row.mhc}\n>{row.Index}\n{row.mhc}\n')
+                        mhc_f.write(f'>{row.Index}\n{row.mhc_name}\n>{row.Index}\n{row.mhc_name}\n')
                         peptide_f.write(f'>{row.Index}\n{row.peptide1}\n>{row.Index}\n{row.peptide2}\n')
                 wd = os.getcwd()
 
