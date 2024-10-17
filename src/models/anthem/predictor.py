@@ -50,6 +50,8 @@ class AnthemPredictor(BasePredictor):
             label = {}
             log50k = {}
             group = group.reset_index(drop=True)
+            # peptide should contain none of B, J, O, U, X, Z
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             mhc_formatted = mhc_name
@@ -59,8 +61,6 @@ class AnthemPredictor(BasePredictor):
                 mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
 
             for length, subgroup in grouped_by_len:
-                # peptide should contain none of B, J, O, U, X, Z
-                subgroup = subgroup[~subgroup['peptide'].str.contains(r'[^BJOUXZ]*', regex=True)]
                 peptides = subgroup['peptide'].tolist()
                 with open('peptides.txt', 'w') as f:
                     for peptide in peptides:
