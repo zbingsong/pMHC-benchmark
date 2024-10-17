@@ -46,7 +46,10 @@ class MixMHCpredPredictor(BasePredictor):
             pred = {}
             label = {}
             log50k = {}
-            group = group.reset_index(drop=True)
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            if len(group) == 0:
+                print(f'No valid peptides for {mhc_name}')
+                continue
             grouped_by_len = group.groupby(group['peptide'].str.len())
             mhc_formatted = mhc_name[4:].replace(':', '')
 
@@ -75,8 +78,9 @@ class MixMHCpredPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        os.remove('peptides.fasta')
-        os.remove('result.tsv')
+        if os.path.exists('peptides.fasta'):
+            os.remove('peptides.fasta')
+            os.remove('result.tsv')
         return (preds,), labels, log50ks, sum(times)
             
     @classmethod
