@@ -31,7 +31,8 @@ class Predictors(enum.Enum):
             - Each tensor (if list has a positive length) has length n
     '''
     MHCFLURRY = src.MHCflurryPredictor()
-    MIXMHCPRED = src.MixMHCpredPredictor()
+    MIXMHCPRED22 = src.MixMHCpred22Predictor()
+    MIXMHCPRED30 = src.MixMHCpred30Predictor()
     NETMHCPAN = src.NetMHCpanPredictor()
     ANTHEM = src.AnthemPredictor()
     TRANSPHLA = src.TransPHLAPredictor()
