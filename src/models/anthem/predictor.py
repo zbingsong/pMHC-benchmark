@@ -49,14 +49,13 @@ class AnthemPredictor(BasePredictor):
             pred = {}
             label = {}
             log50k = {}
-            group = group.reset_index(drop=True)
             # peptide should contain none of B, J, O, U, X, Z
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             mhc_formatted = mhc_name
             if ':' not in mhc_name:
-                mhc_formatted = mhc_name[:-2] + ':' + mhc_name[-2:]
+                mhc_formatted = mhc_formatted[:-2] + ':' + mhc_formatted[-2:]
             if '*' not in mhc_name:
                 mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
 
@@ -99,6 +98,7 @@ class AnthemPredictor(BasePredictor):
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e
+                
                 pred[length] = torch.tensor(result, dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
                 if 'log50k' in subgroup.columns:
@@ -124,11 +124,14 @@ class AnthemPredictor(BasePredictor):
         for mhc_name, group in df:
             pred_diff = {}
             log50k_diff = {}
-            group = group.reset_index(drop=True)
+            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide1'].str.len())
+
+            mhc_formatted = mhc_name
             if ':' not in mhc_name:
-                mhc_formatted = mhc_name[:-2] + ':' + mhc_name[-2:]
-            mhc_formatted = mhc_name[:5] + '*' + mhc_name[5:]
+                mhc_formatted = mhc_formatted[:-2] + ':' + mhc_formatted[-2:]
+            if '*' not in mhc_name:
+                mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
 
             for length, subgroup in grouped_by_len:
                 with open(f'peptides.txt', 'w') as f:
@@ -136,7 +139,7 @@ class AnthemPredictor(BasePredictor):
                         f.write(f'{row.peptide1}\n{row.peptide2}\n')
                 wd = os.getcwd()
 
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--length', str(length), '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
                 assert run_result.returncode == 0
 
                 # Anthem creates a new directory for each run, so we need to find the result file
@@ -153,12 +156,13 @@ class AnthemPredictor(BasePredictor):
                                 break
                             cells = line.split()
                             result.append(float(cells[-1]))
+                        assert len(result) == len(subgroup), f'Length mismatch: {len(result)} vs {len(subgroup)} for {mhc_name} with length {length}'
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e
                 
-                pred1 = torch.tensor(result[:len(result)//2], dtype=torch.double)
-                pred2 = torch.tensor(result[len(result)//2:], dtype=torch.double)
+                pred1 = torch.tensor(result[::2], dtype=torch.double)
+                pred2 = torch.tensor(result[1::2], dtype=torch.double)
                 log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
                 log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
                 shutil.rmtree(latest_dir)
