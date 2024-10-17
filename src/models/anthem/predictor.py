@@ -127,7 +127,9 @@ class AnthemPredictor(BasePredictor):
         for mhc_name, group in df:
             pred_diff = {}
             log50k_diff = {}
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group.reset_index(drop=True)
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
                 continue
@@ -162,7 +164,7 @@ class AnthemPredictor(BasePredictor):
                                 break
                             cells = line.split()
                             result.append(float(cells[-1]))
-                        assert len(result) == len(subgroup), f'Length mismatch: {len(result)} vs {len(subgroup)} for {mhc_name} with length {length}'
+                        assert len(result) == 2 * len(subgroup), f'Length mismatch: {len(result)} vs {len(subgroup)} for {mhc_name} with length {length}'
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e

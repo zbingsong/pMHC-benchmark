@@ -114,7 +114,9 @@ class TransPHLAPredictor(BasePredictor):
                 
             pred_diff = {}
             log50k_diff = {}
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group.reset_index(drop=True)
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
                 continue
@@ -139,7 +141,7 @@ class TransPHLAPredictor(BasePredictor):
 
                 try:
                     result_df = pd.read_csv(f'{cls._exe_dir}/results/predict_results.csv')
-                    assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)}'
+                    assert len(result_df) == 2 * len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)}'
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e
@@ -155,5 +157,7 @@ class TransPHLAPredictor(BasePredictor):
         preds_diff[mhc_name] = pred_diff
         log50ks_diff[mhc_name] = log50k_diff
 
-        os.remove('peptides.txt')
+        if os.path.exists('mhcs.fasta'):
+            os.remove('mhcs.fasta')
+            os.remove('peptides.fasta')
         return (preds_diff,), log50ks_diff
