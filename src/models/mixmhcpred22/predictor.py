@@ -11,7 +11,7 @@ import pathlib
 from . import BasePredictor
 
 
-class MixMHCpredPredictor(BasePredictor):
+class MixMHCpred22Predictor(BasePredictor):
     tasks = None
     _executable = None
     _unknown_mhc = None
@@ -102,7 +102,9 @@ class MixMHCpredPredictor(BasePredictor):
                 
             pred_diff = {}
             log50k_diff = {}
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+            group = group.reset_index(drop=True)
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
                 continue
