@@ -1,2 +1,2 @@
-from ..base import BasePredictor
+from ..base import BasePredictor, SuppressStdout
 from .predictor import MHCflurryPredictor
