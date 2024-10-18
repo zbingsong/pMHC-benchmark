@@ -5,12 +5,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+import collections
+
 from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef
 
 
 RETRIEVAL_KS = [1, 5, 10, 25, 50, 100]
 ALPHAS = [0.5, 1, 2, 5, 10, 20]
-PEPTIDE_LENGTHS = [8, 9, 10, 11, 12, 13, 14]
 
 TEST_RETRIEVAL_TEMPLATE = '''
 Test Retrieval by MHC:
@@ -80,6 +81,15 @@ def test_retrieval(
 ) -> None:
     # if predictions of an mhc is empty, drop it
     predictions = {k: v for k, v in predictions.items() if len(v) > 0}
+    min_pep_len = 50
+    max_pep_len = 0
+    for preds in predictions.values():
+        min_len = min(preds.keys())
+        max_len = max(preds.keys())
+        min_pep_len = min(min_pep_len, min_len)
+        max_pep_len = max(max_pep_len, max_len)
+    peptide_lengths = list(range(min_pep_len, max_pep_len + 1))
+
     n = len(predictions)
     num_positive_peptides = torch.zeros(n, dtype=torch.long)
     num_total_peptides = torch.zeros(n, dtype=torch.long)
@@ -94,13 +104,13 @@ def test_retrieval(
     enrichment_factors = torch.zeros(n, len(ALPHAS), dtype=torch.double)
     bedroc_at_ks = torch.zeros(n, len(ALPHAS), dtype=torch.double)
 
-    auroc_df = pd.DataFrame(columns=list(predictions.keys()), index=PEPTIDE_LENGTHS + ['overall_len'], dtype=float)
+    auroc_df = pd.DataFrame(columns=list(predictions.keys()), index=peptide_lengths + ['overall_len'], dtype=float)
     auroc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
-    auprc_df = pd.DataFrame(columns=list(predictions.keys()), index=PEPTIDE_LENGTHS + ['overall_len'], dtype=float)
+    auprc_df = pd.DataFrame(columns=list(predictions.keys()), index=peptide_lengths + ['overall_len'], dtype=float)
     auprc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
 
-    predictions_by_length = {l: [] for l in PEPTIDE_LENGTHS}
-    labels_by_length = {l: [] for l in PEPTIDE_LENGTHS}
+    predictions_by_length = collections.defaultdict(list)
+    labels_by_length = collections.defaultdict(list)
 
     for i, mhc_name in enumerate(predictions.keys()):
         pred_dict = predictions[mhc_name]
@@ -146,7 +156,7 @@ def test_retrieval(
     num_positive_peptides = num_positive_peptides.float()
     num_total_peptides = num_total_peptides.float()
 
-    for length in PEPTIDE_LENGTHS:
+    for length in peptide_lengths:
         if len(predictions_by_length[length]) > 0:
             preds = torch.cat(predictions_by_length[length])
             labs = torch.cat(labels_by_length[length])
@@ -160,8 +170,8 @@ def test_retrieval(
             predictions_by_length[length] = torch.tensor([], dtype=torch.double)
             labels_by_length[length] = torch.tensor([], dtype=torch.long)
     
-    total_preds = torch.cat([predictions_by_length[length] for length in PEPTIDE_LENGTHS])
-    total_labs = torch.cat([labels_by_length[length] for length in PEPTIDE_LENGTHS])
+    total_preds = torch.cat([predictions_by_length[length] for length in peptide_lengths])
+    total_labs = torch.cat([labels_by_length[length] for length in peptide_lengths])
     sorted_preds, sorted_indices = torch.sort(total_preds, descending=True)
     sorted_labs = total_labs[sorted_indices]
     auroc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
@@ -215,6 +225,8 @@ def test_sensitivity(
             logs.append(log_dict[length])
     predictions_diff = torch.cat(preds)
     log50ks_diff = torch.cat(logs)
+    assert predictions_diff.size(0) == log50ks_diff.size(0), f'{predictions_diff.size()} != {log50ks_diff.size()}'
+
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
     binary_log50ks_diff = (log50ks_diff > 0).int()
@@ -249,23 +261,25 @@ def test_regression(
         log50ks: dict[str, dict[str, torch.DoubleTensor]], 
         output_filename: str,
 ) -> None:
-    n = len(predictions)
-    pearson_corrcoefs = torch.zeros(n, dtype=torch.double)
-    spearman_corrcoefs = torch.zeros(n, dtype=torch.double)
-
-    for i, mhc_name in enumerate(predictions.keys()):
+    preds = []
+    logs = []
+    for mhc_name in predictions.keys():
         pred_dict = predictions[mhc_name]
-        log50k_dict = log50ks[mhc_name]
-        lengths = pred_dict.keys()
-        preds = torch.cat([pred_dict[length] for length in lengths])
-        logs = torch.cat([log50k_dict[length] for length in lengths])
-        pearson_corrcoefs[i] = torchmetrics.functional.pearson_corrcoef(preds, logs)
-        spearman_corrcoefs[i] = torchmetrics.functional.spearman_corrcoef(preds, logs)
+        log_dict = log50ks[mhc_name]
+        for length in pred_dict.keys():
+            preds.append(pred_dict[length])
+            logs.append(log_dict[length])
+    
+    predictions = torch.cat(preds)
+    log50ks = torch.cat(logs)
+
+    pearson_corrcoefs = torchmetrics.functional.pearson_corrcoef(predictions, log50ks)
+    spearman_corrcoefs = torchmetrics.functional.spearman_corrcoef(predictions, log50ks)
 
     with open(f'{output_filename}.txt', 'a') as output_file:
         output_file.write('\nTest Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'
             .format(
-                pearson_corrcoefs.mean(), 
-                spearman_corrcoefs.mean()
+                pearson_corrcoefs, 
+                spearman_corrcoefs
             )
         )
