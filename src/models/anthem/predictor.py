@@ -17,10 +17,12 @@ class AnthemPredictor(BasePredictor):
     _exe_dir = None
     _unknown_mhc = None
     _unknown_peptide = None
+    _wd = None
 
     @classmethod
     def load(cls) -> None:
         cls.tasks = ['Mix']
+        cls._wd = os.getcwd()
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
@@ -70,10 +72,9 @@ class AnthemPredictor(BasePredictor):
                 with open('peptides.txt', 'w') as f:
                     for peptide in peptides:
                         f.write(f'{peptide}\n')
-                wd = os.getcwd()
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/peptides.txt'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
 
                 try:

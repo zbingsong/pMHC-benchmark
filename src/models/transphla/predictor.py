@@ -16,10 +16,12 @@ class TransPHLAPredictor(BasePredictor):
     _exe_dir = None
     _unknown_mhc = None
     _unknown_peptide = None
+    _wd = None
 
     @classmethod
     def load(cls) -> None:
         cls.tasks = ['Mix']
+        cls._wd = os.getcwd()
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
@@ -67,10 +69,9 @@ class TransPHLAPredictor(BasePredictor):
                     for row in subgroup.itertuples():
                         mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n')
                         peptide_f.write(f'>{row.peptide}\n{row.peptide}\n')
-                wd = os.getcwd()
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{wd}/peptides.fasta', '--HLA_file', f'{wd}/mhcs.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/peptides.fasta', '--HLA_file', f'{cls._wd}/mhcs.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
                 times.append(end_time - start_time)
