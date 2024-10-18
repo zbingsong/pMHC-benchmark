@@ -70,7 +70,7 @@ class TransPHLAPredictor(BasePredictor):
                 wd = os.getcwd()
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{wd}/peptides.fasta', '--HLA_file', f'{wd}/mhcs.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
+                run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{wd}/peptides.fasta', '--HLA_file', f'{wd}/mhcs.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
                 times.append(end_time - start_time)
@@ -123,7 +123,7 @@ class TransPHLAPredictor(BasePredictor):
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
             for length, subgroup in grouped_by_len:
-                if length >= 15:
+                if length > 14:
                     if cls._unknown_peptide == 'ignore':
                         continue
                     elif cls._unknown_peptide == 'error':

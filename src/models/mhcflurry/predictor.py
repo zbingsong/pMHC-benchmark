@@ -28,14 +28,14 @@ class MHCflurryPredictor(BasePredictor):
     _predictor = None
     _log50k_base = None
     _unknown_peptide = None
-    _exclude_mhcs = None
+    _exclude_mhc_prefix = None
 
     @classmethod
     def load(cls) -> None:
         cls.tasks = ['EL', 'BA']
         cls._predictor = Class1PresentationPredictor.load()
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
-        cls._exclude_mhcs = {'H2-Qa2', 'Mamu-A11'}
+        cls._exclude_mhc_prefix = ('H2-Qa2', 'Ceat-', 'BoLA-A', 'BoLA-D', 'BoLA-H', 'BoLA-J', 'BoLA-T', 'Mamu-A2', 'Mamu-A7', 'Mamu-A11')
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
             configs = json.load(f)
@@ -53,11 +53,21 @@ class MHCflurryPredictor(BasePredictor):
         times = []
 
         for mhc_name, group in grouped_df:
-            if mhc_name in cls._exclude_mhcs:
+            if mhc_name.startswith(cls._exclude_mhc_prefix):
                 print(f'Excluded MHC: {mhc_name}')
-                continue
-            else:
-                print(f'Predicting for MHC: {mhc_name}')
+                continue   
+            
+            if mhc_name.startswith('Eqca-'):
+                mhc_name = mhc_name[:-5] + '*' + mhc_name[-4:]
+            elif mhc_name.startswith('Mamu-A1:'):
+                mhc_name = 'Mamu-A*' + mhc_name[-4:-2] + ':' + mhc_name[-2:]
+                if mhc_name.startswith(('Mamu-A*1', 'Mamu-A*2')):
+                    print(f'Peptide length 11 is not supported for MHC {mhc_name}')
+                    continue
+            elif mhc_name.startswith('Mamu-B:'):
+                mhc_name = 'Mamu-B*' + mhc_name[-4:-2] + ':' + mhc_name[-2:]
+
+            print(f'Predicting for MHC: {mhc_name}')
 
             affinity_pred = {}
             presentation_pred = {}
@@ -67,7 +77,11 @@ class MHCflurryPredictor(BasePredictor):
             group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
-            for length, subgroup in grouped_by_len:                  
+            for length, subgroup in grouped_by_len:
+                if length > 15:
+                    print(f'Peptide length {length} is too long for MHC {mhc_name}')
+                    continue
+
                 peptides = subgroup['peptide'].tolist()
                 formatted_mhc_name = mhc_name
                 if mhc_name.startswith('BoLA-'):

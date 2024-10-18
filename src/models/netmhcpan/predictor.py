@@ -43,6 +43,8 @@ class NetMHCpanPredictor(BasePredictor):
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             for length, subgroup in grouped_by_len:
+                # if length > 14:
+                #     continue
                 peptides = subgroup['peptide'].tolist()
                 with open('peptides.txt', 'w') as file:
                     for peptide in peptides:
@@ -51,8 +53,9 @@ class NetMHCpanPredictor(BasePredictor):
                 run_result = subprocess.run([cls._executable, '-p', 'peptides.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out.tsv'], stdout=subprocess.DEVNULL)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
+
                 result_df = pd.read_csv('out.tsv', sep='\t', skiprows=[0])
-                assert len(result_df) == len(subgroup)
+                assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)} for {mhc_name}'
                 BA_pred[length] = 100 - torch.tensor(result_df['BA_Rank'].tolist(), dtype=torch.double)
                 EL_pred[length] = 100 - torch.tensor(result_df['EL_Rank'].tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
@@ -99,15 +102,18 @@ class NetMHCpanPredictor(BasePredictor):
                 process1.wait()
                 process2.wait()
                 assert process1.returncode == 0 and process2.returncode == 0
+
                 result_df1 = pd.read_csv('out1.tsv', sep='\t', skiprows=[0])
                 result_df2 = pd.read_csv('out2.tsv', sep='\t', skiprows=[0])
+                assert len(result_df1) == len(subgroup), f'Length mismatch: {len(result_df1)} != {len(subgroup)} for {mhc_name}'
+                assert len(result_df2) == len(subgroup), f'Length mismatch: {len(result_df2)} != {len(subgroup)} for {mhc_name}'
                 
                 BA_pred1 = 100 - torch.tensor(result_df1['BA_Rank'].tolist(), dtype=torch.double)
                 BA_pred2 = 100 - torch.tensor(result_df2['BA_Rank'].tolist(), dtype=torch.double)
                 EL_pred1 = 100 - torch.tensor(result_df1['EL_Rank'].tolist(), dtype=torch.double)
                 EL_pred2 = 100 - torch.tensor(result_df2['EL_Rank'].tolist(), dtype=torch.double)
-                log50k1 = torch.tensor(group['log50k1'].tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(group['log50k2'].tolist(), dtype=torch.double)
+                log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
+                log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
 
                 BA_pred_diff[length] = BA_pred1 - BA_pred2
                 EL_pred_diff[length] = EL_pred1 - EL_pred2

@@ -63,6 +63,9 @@ class AnthemPredictor(BasePredictor):
                 mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
 
             for length, subgroup in grouped_by_len:
+                if length > 14:
+                    print(f'Peptide length too long for {mhc_name}: {length}')
+                    continue
                 peptides = subgroup['peptide'].tolist()
                 with open('peptides.txt', 'w') as f:
                     for peptide in peptides:

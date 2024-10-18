@@ -36,13 +36,15 @@ class MixMHCpred30Predictor(BasePredictor):
         times = []
 
         for mhc_name, group in df:
-            if not mhc_name.startswith('HLA-'):
+            if not mhc_name.startswith(('HLA-A', 'HLA-B', 'HLA-C')):
                 print(f'Unknown MHC name: {mhc_name}')
                 if cls._unknown_mhc == 'ignore':
                     continue
                 elif cls._unknown_mhc == 'error':
                     raise ValueError(f'Unknown MHC name: {mhc_name}')
-                
+            
+            print(f'Running retrieval for {mhc_name}')
+
             pred = {}
             label = {}
             log50k = {}
@@ -55,6 +57,9 @@ class MixMHCpred30Predictor(BasePredictor):
             mhc_formatted = mhc_name[4:].replace(':', '')
 
             for length, subgroup in grouped_by_len:
+                if length > 14:
+                    print(f'Peptide length {length} is too long for {mhc_name}')
+                    continue
                 peptides = subgroup['peptide'].tolist()
                 with open(f'peptides.txt', 'w') as f:
                     for peptide in peptides:
@@ -67,6 +72,7 @@ class MixMHCpred30Predictor(BasePredictor):
                 times.append(end_time - start_time)
                 try:
                     result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
+                    assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} vs {len(subgroup)} for {mhc_name}'
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e
@@ -112,6 +118,8 @@ class MixMHCpred30Predictor(BasePredictor):
             mhc_formatted = mhc_name[4:].replace(':', '')
 
             for length, subgroup in grouped_by_len:
+                if length > 14:
+                    continue
                 peptides1 = subgroup['peptide1'].tolist()
                 with open(f'peptides.fasta', 'w') as f:
                     for peptide in peptides1:

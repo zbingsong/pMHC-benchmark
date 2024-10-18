@@ -36,7 +36,7 @@ class MixMHCpred22Predictor(BasePredictor):
         times = []
 
         for mhc_name, group in df:
-            if not mhc_name.startswith('HLA-'):
+            if not mhc_name.startswith(('HLA-A', 'HLA-B', 'HLA-C')):
                 print(f'Unknown MHC name: {mhc_name}')
                 if cls._unknown_mhc == 'ignore':
                     continue
@@ -55,20 +55,22 @@ class MixMHCpred22Predictor(BasePredictor):
             mhc_formatted = mhc_name[4:].replace(':', '')
 
             for length, subgroup in grouped_by_len:
+                if length > 14:
+                    continue
                 peptides = subgroup['peptide'].tolist()
                 with open(f'peptides.fasta', 'w') as f:
                     for peptide in peptides:
                         f.write(f'>{peptide}\n{peptide}\n')
                         
                 start_time = time.time_ns()
-                run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
+                run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
                 times.append(end_time - start_time)
                 try:
                     result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
                 except Exception as e:
-                    print(mhc_name, ' failed')
+                    print(mhc_formatted, ' failed')
                     raise e
                 pred[length] = torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
