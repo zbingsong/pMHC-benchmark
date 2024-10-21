@@ -51,7 +51,7 @@ class MHCflurryPredictor(BasePredictor):
             elif mhc_name.startswith('Mamu-A1:'):
                 mhc_name = 'Mamu-A*' + mhc_name[-4:-2] + ':' + mhc_name[-2:]
                 if mhc_name.startswith(('Mamu-A*1', 'Mamu-A*2')):
-                    print(f'Peptide length 11 is not supported for MHC {mhc_name}')
+                    print(f'MHC {mhc_name} not supported')
                     continue
             elif mhc_name.startswith('Mamu-B:'):
                 mhc_name = 'Mamu-B*' + mhc_name[-4:-2] + ':' + mhc_name[-2:]
