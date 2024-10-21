@@ -40,10 +40,13 @@ class AnthemPredictor(BasePredictor):
         log50ks = {}
         times = []
 
+        num_skipped = 0
+
         for mhc_name, group in df:
             if not mhc_name.startswith('HLA-'):
                 print(f'Unknown MHC name: {mhc_name}')
                 if cls._unknown_mhc == 'ignore':
+                    num_skipped += len(group)
                     continue
                 elif cls._unknown_mhc == 'error':
                     raise ValueError(f'Unknown MHC name: {mhc_name}')
@@ -52,7 +55,9 @@ class AnthemPredictor(BasePredictor):
             label = {}
             log50k = {}
             # peptide should contain none of B, J, O, U, X, Z
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            filtered = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            num_skipped += len(group) - len(filtered)
+            group = filtered
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
                 continue
@@ -67,6 +72,7 @@ class AnthemPredictor(BasePredictor):
             for length, subgroup in grouped_by_len:
                 if length > 14:
                     print(f'Peptide length too long for {mhc_name}: {length}')
+                    num_skipped += len(subgroup)
                     continue
                 peptides = subgroup['peptide'].tolist()
                 with open('peptides.txt', 'w') as f:
@@ -82,6 +88,7 @@ class AnthemPredictor(BasePredictor):
                 except Exception as e:
                     print(f'Error running Anthem for {mhc_formatted} with length {length}')
                     if cls._unknown_mhc == 'ignore':
+                        num_skipped += len(subgroup)
                         continue
                     elif cls._unknown_mhc == 'error':
                         raise e
@@ -118,6 +125,7 @@ class AnthemPredictor(BasePredictor):
             log50ks[mhc_name] = log50k
 
         os.remove('peptides.txt')
+        print(f'Skipped {num_skipped} peptides')
         return (preds,), labels, log50ks, sum(times)
             
     @classmethod
