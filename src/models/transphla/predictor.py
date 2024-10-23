@@ -78,7 +78,7 @@ class TransPHLAPredictor(BasePredictor):
 
                 try:
                     result_df = pd.read_csv(f'{cls._exe_dir}/results/predict_results.csv')
-                    assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)}'
+                    assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)} for {mhc_name}'
                 except Exception as e:
                     print(mhc_name, ' failed')
                     raise e
