@@ -1,6 +1,5 @@
 import torch
-import torchmetrics.functional.classification
-import torchmetrics.functional.retrieval
+import sklearn.metrics
 
 import math
 
@@ -117,7 +116,9 @@ def compute_binary_auroc(
         return torch.tensor(1, dtype=torch.double)
     # otherwise, compute AUROC normally
     else:
-        return torchmetrics.functional.classification.binary_auroc(predictions, labels)
+        predictions = predictions.numpy()
+        labels = labels.numpy()
+        return torch.tensor(sklearn.metrics.roc_auc_score(labels, predictions), dtype=torch.double)
     
 
 def compute_binary_auprc(
@@ -133,7 +134,7 @@ def compute_binary_auprc(
         return torch.tensor(1, dtype=torch.double)
     # otherwise, compute AUPRC normally
     else:
-        return torchmetrics.functional.classification.binary_average_precision(predictions, labels)
+        return torch.tensor(sklearn.metrics.average_precision_score(labels, predictions), dtype=torch.double)
 
 
 def compute_retrieval_auroc(
@@ -150,7 +151,7 @@ def compute_retrieval_auroc(
         return torch.tensor(1, dtype=torch.double)
     # otherwise, compute AUROC normally
     else:
-        return torchmetrics.functional.classification.binary_auroc(sorted_predictions[:top_k], sorted_labels[:top_k])
+        return torch.tensor(sklearn.metrics.roc_auc_score(sorted_labels[:top_k], sorted_predictions[:top_k]), dtype=torch.double)
 
 
 def compute_retrieval_auprc(
@@ -167,4 +168,4 @@ def compute_retrieval_auprc(
         return torch.tensor(1, dtype=torch.double)
     # otherwise, compute AUPRC normally
     else:
-        return torchmetrics.functional.classification.binary_average_precision(sorted_predictions[:top_k], sorted_labels[:top_k])
+        return torch.tensor(sklearn.metrics.average_precision_score(sorted_labels[:top_k], sorted_predictions[:top_k]), dtype=torch.double)
