@@ -7,49 +7,30 @@ import pandas as pd
 
 import collections
 
-from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef
+from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef, compute_auac
 
 
-RETRIEVAL_KS = [1, 5, 10, 25, 50, 100]
-ALPHAS = [0.5, 1, 2, 5, 10, 20]
+RETRIEVAL_KS = [1, 3, 5, 10, 20] # for precision@k
+ALPHAS = [20, 85, 150] # for BEDROC, 20 is suggested by authors, 85 is used by DrugCLIP
+PROPORTIONS = [0.005, 0.01, 0.02, 0.05, 0.1, 0.2] # for EF
 
-TEST_RETRIEVAL_TEMPLATE = '''
-Test Retrieval by MHC:
+TEST_RETRIEVAL_TEMPLATE = '''Test Retrieval by MHC:
 retrieval k: {}
 alphas: {}
-positives: {:.4f} +/- {:.4f}
-totals: {:.4f} +/- {:.4f}
-Averaged by MHC:
-auroc: {:.6f} +/- {:.6f}
-auprc: {:.6f} +/- {:.6f}
-bedroc: {:.6f} +/- {:.6f}
-Retrieval by MHC:
-precision@k:
-{}
-std:
-{}
-auroc@k:
-{}
-std:
-{}
-auprc@k:
-{}
-std:
-{}
-enrichment_factors:
-{}
-std:
-{}
-BEDROC:
-{}
-std:
-{}
+proportions: {}
+positives: {}
+totals: {}
+auroc: {:.6f}
+auprc: {:.6f}
+precision@k: {}
+bedroc: {}
+enrichment_factor: {}
+auac: {}
 time: {} nanoseconds
 
 '''
 
-TEST_SENSITIVITY_TEMPLATE = '''
-Test Sensitivity:
+TEST_SENSITIVITY_TEMPLATE = '''Test Sensitivity:
 accuracy: {:.4f}
 precision: {:.4f}
 recall: {:.4f}
@@ -73,6 +54,32 @@ def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
     plt.close()
 
 
+def _compute_metrics(
+        output_df: pd.DataFrame,
+        preds: torch.DoubleTensor,
+        labs: torch.LongTensor,
+        mhc_name: str,
+        suffix: str | int,
+):
+    sorted_preds, sorted_indices = torch.sort(preds, descending=True)
+    sorted_labs = labs[sorted_indices]
+    auroc = compute_binary_auroc(sorted_preds, sorted_labs)
+    output_df.loc[f'auroc_{suffix}', mhc_name] = auroc.item()
+    auprc = compute_binary_auprc(sorted_preds, sorted_labs)
+    output_df.loc[f'auprc_{suffix}', mhc_name] = auprc.item()
+    for k in RETRIEVAL_KS:
+        precision_at_k = torchmetrics.functional.retrieval.retrieval_precision(sorted_preds, sorted_labs, top_k=k)
+        output_df.loc[f'precision@{k}_{suffix}', mhc_name] = precision_at_k.item()
+    for alpha in ALPHAS:
+        bedroc = compute_bedroc(sorted_labs, alpha=alpha)
+        output_df.loc[f'bedroc_{alpha}_{suffix}', mhc_name] = bedroc.item()
+    for proportion in PROPORTIONS:
+        enrichment_factor = compute_ef(sorted_labs, proportion=proportion)
+        output_df.loc[f'enrichment_factor_{proportion}_{suffix}', mhc_name] = enrichment_factor.item()
+        auac = compute_auac(sorted_labs, proportion=proportion)
+        output_df.loc[f'auac_{proportion}_{suffix}', mhc_name] = auac.item()
+
+
 def test_retrieval(
         predictions: dict[str, dict[str, torch.DoubleTensor]], 
         labels: dict[str, dict[str, torch.LongTensor]], 
@@ -81,6 +88,7 @@ def test_retrieval(
 ) -> None:
     # if predictions of an mhc is empty, drop it
     predictions = {k: v for k, v in predictions.items() if len(v) > 0}
+    # find the max and min peptide length for building dataframes
     min_pep_len = 50
     max_pep_len = 0
     for preds in predictions.values():
@@ -88,126 +96,88 @@ def test_retrieval(
         max_len = max(preds.keys())
         min_pep_len = min(min_pep_len, min_len)
         max_pep_len = max(max_pep_len, max_len)
-    peptide_lengths = list(range(min_pep_len, max_pep_len + 1))
 
-    n = len(predictions)
-    num_positive_peptides = torch.zeros(n, dtype=torch.long)
-    num_total_peptides = torch.zeros(n, dtype=torch.long)
+    columns = sorted(list(predictions.keys())) + ['overall_by_len']
+    indices_per_test = list(range(min_pep_len, max_pep_len + 1)) + ['overall_by_mhc']
+    tests = ['auroc', 'auprc'] + [f'bedroc_{alpha}' for alpha in ALPHAS] + [f'auac_{proportion}' for proportion in PROPORTIONS] + [f'precision@{k}' for k in RETRIEVAL_KS] + [f'enrichment_factor_{proportion}' for proportion in PROPORTIONS]
+    indices = [f'{test}_{index}' for test in tests for index in indices_per_test]
 
-    aurocs = torch.zeros(n, dtype=torch.double)
-    auprcs = torch.zeros(n, dtype=torch.double)
-    bedrocs = torch.zeros(n, dtype=torch.double)
-    
-    precision_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
-    auroc_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
-    auprc_at_ks = torch.zeros(n, len(RETRIEVAL_KS), dtype=torch.double)
-    enrichment_factors = torch.zeros(n, len(ALPHAS), dtype=torch.double)
-    bedroc_at_ks = torch.zeros(n, len(ALPHAS), dtype=torch.double)
-
-    auroc_df = pd.DataFrame(columns=list(predictions.keys()), index=peptide_lengths + ['overall_len'], dtype=float)
-    auroc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
-    auprc_df = pd.DataFrame(columns=list(predictions.keys()), index=peptide_lengths + ['overall_len'], dtype=float)
-    auprc_df.insert(len(predictions.keys()), 'overall_mhc', float('nan'))
+    num_positive_peptides: int = 0
+    num_total_peptides: int = 0
+    # columns are MHC names and 'overall_by_len', indices are metrics, where each metric has a row for each peotide length and 'overall_by_mhc'
+    output_df = pd.DataFrame(columns=columns, index=indices, dtype=float)
 
     predictions_by_length = collections.defaultdict(list)
     labels_by_length = collections.defaultdict(list)
+    # for computing metrics for all data
+    all_predictions = []
+    all_labels = []
 
-    for i, mhc_name in enumerate(predictions.keys()):
+    for mhc_name in predictions.keys():
         pred_dict = predictions[mhc_name]
         lab_dict = labels[mhc_name]
         preds_list = []
         labs_list = []
 
+        # for each sequence length, calculate metrics
         for seq_length in pred_dict.keys():
             preds = pred_dict[seq_length]
             labs = lab_dict[seq_length]
             preds_list.append(preds)
             labs_list.append(labs)
-            sorted_preds, sorted_indices = torch.sort(preds, descending=True)
-            sorted_labs = labs[sorted_indices]
-            auroc = compute_binary_auroc(sorted_preds, sorted_labs)
-            auprc = compute_binary_auprc(sorted_preds, sorted_labs)
-            auroc_df.loc[seq_length, mhc_name] = auroc.item()
-            auprc_df.loc[seq_length, mhc_name] = auprc.item()
+            num_positive_peptides += labs.sum().item()
+            num_total_peptides += labs.size(0)
+
+            _compute_metrics(output_df, preds, labs, mhc_name, seq_length)
             predictions_by_length[seq_length].append(preds)
             labels_by_length[seq_length].append(labs)
         
+        # concatenate predictions and labels for all sequence lengths, calculate metrics for each MHC
         preds = torch.cat(preds_list)
         labs = torch.cat(labs_list)
-        sorted_preds, sorted_indices = torch.sort(preds, descending=True)
-        sorted_labs = labs[sorted_indices]
+        _compute_metrics(output_df, preds, labs, mhc_name, 'overall_by_mhc')
 
-        aurocs[i] = compute_binary_auroc(sorted_preds, sorted_labs)
-        auprcs[i] = compute_binary_auprc(sorted_preds, sorted_labs)
-        bedrocs[i] = compute_bedroc(sorted_labs, 100.0)
-        num_positive_peptides[i] = sorted_labs.sum()
-        num_total_peptides[i] = sorted_labs.size(0)
-        auroc_df.loc['overall_len', mhc_name] = aurocs[i].item()
-        auprc_df.loc['overall_len', mhc_name] = auprcs[i].item()
-
-        for j, k in enumerate(RETRIEVAL_KS):
-            precision_at_ks[i, j] = torchmetrics.functional.retrieval.retrieval_precision(sorted_preds, sorted_labs, top_k=k)
-            auroc_at_ks[i, j] = compute_retrieval_auroc(sorted_preds, sorted_labs, top_k=k)
-            auprc_at_ks[i, j] = compute_retrieval_auprc(sorted_preds, sorted_labs, top_k=k)
-        for j, alpha in enumerate(ALPHAS):
-            enrichment_factors[i, j] = compute_ef(sorted_labs, alpha=alpha)
-            bedroc_at_ks[i, j] = compute_bedroc(sorted_labs, alpha=alpha)
-
-    num_positive_peptides = num_positive_peptides.float()
-    num_total_peptides = num_total_peptides.float()
-
-    for length in peptide_lengths:
+    # concatenate predictions and labels for all MHCs, calculate metrics for each peptide length
+    for length in range(min_pep_len, max_pep_len + 1):
+        # if have predictions for this length
         if len(predictions_by_length[length]) > 0:
             preds = torch.cat(predictions_by_length[length])
             labs = torch.cat(labels_by_length[length])
-            predictions_by_length[length] = preds
-            labels_by_length[length] = labs
-            sorted_preds, sorted_indices = torch.sort(preds, descending=True)
-            sorted_labs = labs[sorted_indices]
-            auroc_df.loc[length, 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
-            auprc_df.loc[length, 'overall_mhc'] = compute_binary_auprc(sorted_preds, sorted_labs).item()
+            all_predictions.append(preds)
+            all_labels.append(labs)
+            _compute_metrics(output_df, preds, labs, 'overall_by_len', length)
         else:
             predictions_by_length[length] = torch.tensor([], dtype=torch.double)
             labels_by_length[length] = torch.tensor([], dtype=torch.long)
     
-    total_preds = torch.cat([predictions_by_length[length] for length in peptide_lengths])
-    total_labs = torch.cat([labels_by_length[length] for length in peptide_lengths])
-    sorted_preds, sorted_indices = torch.sort(total_preds, descending=True)
-    sorted_labs = total_labs[sorted_indices]
-    auroc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auroc(sorted_preds, sorted_labs).item()
-    auprc_df.loc['overall_len', 'overall_mhc'] = compute_binary_auprc(sorted_preds, sorted_labs).item()
+    total_preds = torch.cat([predictions_by_length[length] for length in indices_per_test])
+    total_labs = torch.cat([labels_by_length[length] for length in indices_per_test])
+    _compute_metrics(output_df, total_preds, total_labs, 'overall_by_len', 'overall_by_mhc')
 
+    output_df.to_csv(f'{output_filename}_breakdown.csv')
     _plot_similarities(total_preds, f'{output_filename}_predictions.png')
 
+    auroc = output_df.loc['auroc_overall_by_len', 'overall_by_mhc']
+    auprc = output_df.loc['auprc_overall_by_len', 'overall_by_mhc']
+    precision_at_k = np.array([output_df.loc[f'precision@{k}_overall_by_len', 'overall_by_mhc'] for k in RETRIEVAL_KS])
+    bedroc = np.array([output_df.loc[f'bedroc_{alpha}_overall_by_len', 'overall_by_mhc'] for alpha in ALPHAS])
+    auac = np.array([output_df.loc[f'auac_{proportion}_overall_by_len', 'overall_by_mhc'] for proportion in PROPORTIONS])
+    enrichment_factors = np.array([output_df.loc[f'enrichment_factor_{proportion}_overall_by_len', 'overall_by_mhc'] for proportion in PROPORTIONS])
     with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_RETRIEVAL_TEMPLATE.format(
             RETRIEVAL_KS,
             ALPHAS,
-            num_positive_peptides.mean(),
-            num_positive_peptides.std(),
-            num_total_peptides.mean(),
-            num_total_peptides.std(),
-            aurocs.mean(), 
-            aurocs.std(),
-            auprcs.mean(),
-            auprcs.std(),
-            bedrocs.mean(),
-            bedrocs.std(),
-            np.array2string(precision_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(precision_at_ks.std(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(auroc_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(auroc_at_ks.std(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(auprc_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(auprc_at_ks.std(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(enrichment_factors.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(enrichment_factors.std(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(bedroc_at_ks.mean(dim=0).numpy(), precision=6, separator=','),
-            np.array2string(bedroc_at_ks.std(dim=0).numpy(), precision=6, separator=','),
+            PROPORTIONS,
+            num_positive_peptides,
+            num_total_peptides,
+            auroc,
+            auprc,
+            np.array2string(precision_at_k, precision=6, separator=', '),
+            np.array2string(bedroc, precision=6, separator=', '),
+            np.array2string(enrichment_factors, precision=6, separator=', '),
+            np.array2string(auac, precision=6, separator=', '),
             time_taken
         ))
-    
-    auroc_df.to_csv(f'{output_filename}_auroc.csv')
-    auprc_df.to_csv(f'{output_filename}_auprc.csv')
 
 
 def test_sensitivity(

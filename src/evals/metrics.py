@@ -6,7 +6,7 @@ import math
 
 def compute_ef(
         sorted_labels: torch.LongTensor, 
-        alpha: float=100.0
+        proportion: float=0.05
 ) -> torch.DoubleTensor:
     '''
     EF_alpha = (NTB_alpha) / (NTB_total * alpha)
@@ -14,34 +14,37 @@ def compute_ef(
 
     Parameters:
     sorted_labels (torch.LongTensor): tensor of shape (n, ), containing the true labels sorted by predicted score
-    alpha (float): proportion of positive samples to consider, in the range (0, 100]
+    proportion (float): proportion of positive samples to consider, in the range (0, 1] (alpha in the equation above)
     - warning: at small alpha, there may be significant precision issues
     
     Returns:
     torch.DoubleTensor: scalar tensor representing enrichment factor at alpha
     '''
-    alpha /= 100
     n = sorted_labels.sum().long()
     if n == 0:
         return torch.tensor(0, dtype=torch.double)
     N = sorted_labels.size(0)
-    k = math.ceil(alpha * N)
+    k = math.ceil(proportion * N)
     num_true_binders_alpha = sorted_labels[:k].sum().long()
-    return num_true_binders_alpha / (n * alpha)
+    return num_true_binders_alpha / (n * proportion)
 
 
-def compute_auac(sorted_labels: torch.LongTensor, alpha: float=100.0) -> torch.DoubleTensor:
+def compute_auac(
+        sorted_labels: torch.LongTensor, 
+        proportion: float=0.05
+) -> torch.DoubleTensor:
     '''
     AUAC = \int_0^1 F_a(x) dx, where F_a(x) is the fraction of true binders in the top x fraction of the predictions.
-    Discrete: AUAC = \sum_{i=0}^N TP_i / i, where TP_i is the number of true positives in the top i predictions.
+    Discrete: AUAC = \sum_{i=0}^N \frac{TP_i}{i}, where TP_i is the number of true positives in the top i predictions.
 
     Parameters:
     sorted_labels (torch.LongTensor): tensor of shape (n, ), containing the true labels sorted by predicted score
+    proportion (float): proportion of positive samples to consider, in the range (0, 1] (x in the equation above)
     
     Returns:
     torch.DoubleTensor: scalar tensor representing area under the accumulation curve
     '''
-    n = math.ceil(alpha * sorted_labels.size(0) / 100)
+    n = math.ceil(proportion * sorted_labels.size(0))
     if n == 0:
         return torch.tensor(0, dtype=torch.double)
     sorted_labels = sorted_labels[:n]
@@ -51,15 +54,20 @@ def compute_auac(sorted_labels: torch.LongTensor, alpha: float=100.0) -> torch.D
 
 def _compute_rie(
         sorted_labels: torch.LongTensor,
-        alpha: torch.DoubleTensor
+        alpha: torch.DoubleTensor=20.0
 ) -> torch.DoubleTensor:
     '''
+    Robust Initial Enhancement (RIE): https://doi.org/10.1021/ci0100144
+    Implementation based on: https://doi.org/10.1021/ci600426e, equation 19
     RIE = \frac{\frac{1}{n} \sum_{i=1}^n \exp(-\alpha r_i / N)}{\frac{1}{N} \left( \frac{1 - \exp(-\alpha)}{\exp(\alpha / N) - 1} \right)}
     where n is the number of true positives, N is the total number of predictions (both positive and negative), and r_i is the rank of the i-th true positive in the predictions (1-indexed).
 
     Parameters:
     sorted_labels (torch.LongTensor): tensor of shape (N, ), containing the true labels sorted by predicted score
-    alpha (torch.DoubleTensor): porportion of early recognition we care about, in the range (0, 100]
+    alpha (torch.DoubleTensor): hyperparameter controlling the strength of the enhancement
+    - greater than 0
+    - usually take the value of 20
+    - higher alpha values result in stronger enhancement, similar to smaller proportion in EF and AUAC; alpha is similar to 1 / proportion (https://doi.org/10.1186/1758-2946-5-26)
     - warning: at small alpha, there may be significant precision issues
     
     Returns:
@@ -71,22 +79,26 @@ def _compute_rie(
     N = sorted_labels.size(0)
     R_alpha = (n / N).to(torch.double)
     positive_ranks = torch.nonzero(sorted_labels).squeeze(1) + 1
-    rie = (torch.exp(-alpha * positive_ranks / N)).sum() \
-        / (R_alpha * (1 - torch.exp(-alpha)) / (torch.exp(alpha / N) - 1))
+    rie = (torch.exp(-alpha * positive_ranks / N)).sum() / (R_alpha * (1 - torch.exp(-alpha)) / (torch.exp(alpha / N) - 1))
     return rie
 
 
 def compute_bedroc(
         sorted_labels: torch.LongTensor,
-        alpha: float=100
+        alpha: float=20.0
 ) -> torch.DoubleTensor:
     '''
-    BEDROC = RIE * \frac{}{}
+    Boltzmann-Enhanced Discrimination of Receiver Operating Characteristic (BEDROC): https://doi.org/10.1021/ci600426e
+    BEDROC = RIE * \frac{R_{\alpha} \sinh (\alpha / 2)}{\cosh (\alpha / 2) - \cosh (\alpha / 2 - \alpha R_{\alpha})} + \frac{1}{1 - \exp(\alpha (1 - R_{\alpha})}
     where n is the number of true positives, N is the total number of predictions (both positive and negative), and r_i is the rank of the i-th true positive in the predictions (1-indexed).
+    BEDROC scales RIE to [0, 1].
 
     Parameters:
     sorted_labels (torch.LongTensor): tensor of shape (N, ), containing the true labels sorted by predicted score
-    alpha (float): porportion of early recognition we care about, in the range (0, 100]
+    alpha (float): hyperparameter controlling the strength of the enhancement
+    - greater than 0
+    - usually take the value of 20
+    - higher alpha values result in stronger enhancement, similar to smaller proportion in EF and AUAC; alpha is similar to 1 / proportion (https://doi.org/10.1186/1758-2946-5-26)
     - warning: at small alpha, there may be significant precision issues
     
     Returns:
@@ -101,8 +113,7 @@ def compute_bedroc(
     R_alpha = (n / N).to(torch.double)
     alpha = torch.tensor(alpha, dtype=torch.double)
     RIE = _compute_rie(sorted_labels, alpha)
-    BEDROC = RIE * (R_alpha * torch.sinh(alpha / 2)) / (torch.cosh(alpha / 2) - torch.cosh(alpha / 2 - alpha * R_alpha)) \
-        + 1 / (1 - torch.exp(alpha * (1 - R_alpha)))
+    BEDROC = RIE * (R_alpha * torch.sinh(alpha / 2)) / (torch.cosh(alpha / 2) - torch.cosh(alpha / 2 - alpha * R_alpha)) + 1 / (1 - torch.exp(alpha * (1 - R_alpha)))
     return BEDROC
 
 
@@ -116,6 +127,7 @@ def compute_binary_auroc(
         return torch.tensor(1, dtype=torch.double)
     # otherwise, compute AUROC normally
     else:
+        predictions /= predictions.max()
         predictions = predictions.numpy()
         labels = labels.numpy()
         return torch.tensor(sklearn.metrics.roc_auc_score(labels, predictions), dtype=torch.double)
@@ -134,6 +146,9 @@ def compute_binary_auprc(
         return torch.tensor(1, dtype=torch.double)
     # otherwise, compute AUPRC normally
     else:
+        predictions /= predictions.max()
+        predictions = predictions.numpy()
+        labels = labels.numpy()
         return torch.tensor(sklearn.metrics.average_precision_score(labels, predictions), dtype=torch.double)
 
 
