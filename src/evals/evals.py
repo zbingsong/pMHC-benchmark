@@ -7,7 +7,7 @@ import pandas as pd
 
 import collections
 
-from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_retrieval_auroc, compute_retrieval_auprc, compute_ef, compute_auac
+from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_ef, compute_auac
 
 
 RETRIEVAL_KS = [1, 3, 5, 10, 20] # for precision@k
@@ -150,19 +150,19 @@ def test_retrieval(
             predictions_by_length[length] = torch.tensor([], dtype=torch.double)
             labels_by_length[length] = torch.tensor([], dtype=torch.long)
     
-    total_preds = torch.cat([predictions_by_length[length] for length in indices_per_test])
-    total_labs = torch.cat([labels_by_length[length] for length in indices_per_test])
+    total_preds = torch.cat(all_predictions)
+    total_labs = torch.cat(all_labels)
     _compute_metrics(output_df, total_preds, total_labs, 'overall_by_len', 'overall_by_mhc')
 
     output_df.to_csv(f'{output_filename}_breakdown.csv')
     _plot_similarities(total_preds, f'{output_filename}_predictions.png')
 
-    auroc = output_df.loc['auroc_overall_by_len', 'overall_by_mhc']
-    auprc = output_df.loc['auprc_overall_by_len', 'overall_by_mhc']
-    precision_at_k = np.array([output_df.loc[f'precision@{k}_overall_by_len', 'overall_by_mhc'] for k in RETRIEVAL_KS])
-    bedroc = np.array([output_df.loc[f'bedroc_{alpha}_overall_by_len', 'overall_by_mhc'] for alpha in ALPHAS])
-    auac = np.array([output_df.loc[f'auac_{proportion}_overall_by_len', 'overall_by_mhc'] for proportion in PROPORTIONS])
-    enrichment_factors = np.array([output_df.loc[f'enrichment_factor_{proportion}_overall_by_len', 'overall_by_mhc'] for proportion in PROPORTIONS])
+    auroc = output_df.loc['auroc_overall_by_mhc', 'overall_by_len']
+    auprc = output_df.loc['auprc_overall_by_mhc', 'overall_by_len']
+    precision_at_k = np.array([output_df.loc[f'precision@{k}_overall_by_mhc', 'overall_by_len'] for k in RETRIEVAL_KS])
+    bedroc = np.array([output_df.loc[f'bedroc_{alpha}_overall_by_mhc', 'overall_by_len'] for alpha in ALPHAS])
+    auac = np.array([output_df.loc[f'auac_{proportion}_overall_by_mhc', 'overall_by_len'] for proportion in PROPORTIONS])
+    enrichment_factors = np.array([output_df.loc[f'enrichment_factor_{proportion}_overall_by_mhc', 'overall_by_len'] for proportion in PROPORTIONS])
     with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_RETRIEVAL_TEMPLATE.format(
             RETRIEVAL_KS,
@@ -247,7 +247,7 @@ def test_regression(
     spearman_corrcoefs = torchmetrics.functional.spearman_corrcoef(predictions, log50ks)
 
     with open(f'{output_filename}.txt', 'a') as output_file:
-        output_file.write('\nTest Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'
+        output_file.write('Test Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'
             .format(
                 pearson_corrcoefs, 
                 spearman_corrcoefs
