@@ -1,4 +1,4 @@
-import pandas.core.groupby.generic as pd_typing
+import pandas as pd
 import torch
 
 import os
@@ -33,8 +33,10 @@ class AnthemPredictor(BasePredictor):
     @classmethod
     def run_retrieval(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        df = df.groupby('mhc_name')
+        
         preds = {}
         labels = {}
         log50ks = {}
@@ -75,12 +77,12 @@ class AnthemPredictor(BasePredictor):
                     num_skipped += len(subgroup)
                     continue
                 peptides = subgroup['peptide'].tolist()
-                with open('peptides.txt', 'w') as f:
+                with open('peptides_anthem.txt', 'w') as f:
                     for peptide in peptides:
                         f.write(f'{peptide}\n')
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/peptides.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/peptides_anthem.txt'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
 
                 try:
@@ -124,22 +126,24 @@ class AnthemPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        os.remove('peptides.txt')
+        os.remove('peptides_anthem.txt')
         print(f'Skipped {num_skipped} peptides')
         return (preds,), labels, log50ks, sum(times)
     
     @classmethod
     def run_sq(
             cls, 
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
             
     @classmethod
     def run_sensitivity(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        df = df.groupby('mhc_name')
+        
         preds_diff = {}
         log50ks_diff = {}
 
@@ -161,12 +165,12 @@ class AnthemPredictor(BasePredictor):
                 mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
 
             for length, subgroup in grouped_by_len:
-                with open(f'peptides.txt', 'w') as f:
+                with open(f'peptides_anthem.txt', 'w') as f:
                     for row in subgroup.itertuples():
                         f.write(f'{row.peptide1}\n{row.peptide2}\n')
                 wd = os.getcwd()
 
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides_anthem.txt'], cwd=cls._exe_dir)
                 assert run_result.returncode == 0
 
                 # Anthem creates a new directory for each run, so we need to find the result file
@@ -200,5 +204,5 @@ class AnthemPredictor(BasePredictor):
         preds_diff[mhc_name] = pred_diff
         log50ks_diff[mhc_name] = log50k_diff
 
-        os.remove('peptides.txt')
+        os.remove('peptides_anthem.txt')
         return (preds_diff,), log50ks_diff

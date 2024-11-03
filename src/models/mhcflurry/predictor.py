@@ -1,5 +1,5 @@
 from mhcflurry import Class1PresentationPredictor
-import pandas.core.groupby.generic as pd_typing
+import pandas as pd
 import torch
 
 import time
@@ -33,15 +33,17 @@ class MHCflurryPredictor(BasePredictor):
     @classmethod
     def run_retrieval(
             cls,
-            grouped_df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[list[torch.DoubleTensor], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        df = df.groupby('mhc_name')
+
         affinity_preds = {}
         presentation_preds = {}
         labels = {}
         log50ks = {}
         times = []
 
-        for mhc_name, group in grouped_df:
+        for mhc_name, group in df:
             if mhc_name.startswith(cls._exclude_mhc_prefix):
                 print(f'Excluded MHC: {mhc_name}')
                 continue   
@@ -99,15 +101,17 @@ class MHCflurryPredictor(BasePredictor):
     @classmethod
     def run_sq(
             cls, 
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
 
     @classmethod
     def run_sensitivity(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        df = df.groupby('mhc_name')
+
         affinity_preds_diff = {}
         presentation_preds_diff = {}
         log50ks_diff = {}

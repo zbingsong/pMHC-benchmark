@@ -1,4 +1,4 @@
-import pandas.core.groupby.generic as pd_typing
+import pandas as pd
 import torch
 import abc
 
@@ -19,13 +19,14 @@ class BasePredictor(abc.ABC):
     @abc.abstractmethod
     def run_retrieval(
             cls, 
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         '''
-        Run the predictor on the given DataFrameGroupBy.
+        Run the predictor on the given DataFrame.
 
         Parameters:
-        df (pd.api.typing.DataFrameGroupBy): DataFrameGroupBy with the following columns:
+        df (pd.DataFrame): DataFrame with the following columns:
+            - 'mhc_name': MHC names
             - 'peptide': Peptide sequences.
             - 'label': Binary labels.
             - 'log50k' (optional): Log50k values.
@@ -44,13 +45,14 @@ class BasePredictor(abc.ABC):
     @abc.abstractmethod
     def run_sq(
             cls, 
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         '''
-        Run the predictor on the given DataFrameGroupBy, from a square dataset (i.e. every MHC is paired with every peptide).
+        Run the predictor on the given DataFrame, from a square dataset (i.e. every MHC is paired with every peptide).
 
         Parameters:
-        df (pd.api.typing.DataFrameGroupBy): DataFrameGroupBy with the following columns:
+        df (pd.DataFrame): DataFrame with the following columns:
+            - 'mhc_name': MHC names.
             - 'peptide': Peptide sequences.
             - 'label': Binary labels.
             - 'log50k' (optional): Log50k values.
@@ -69,13 +71,13 @@ class BasePredictor(abc.ABC):
     @abc.abstractmethod
     def run_sensitivity(
             cls, 
-            grouped_df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
         '''
-        Run the predictor on the given DataFrameGroupBy for sensitivity analysis.
+        Run the predictor on the given DataFrame for sensitivity analysis.
 
         Parameters:
-        grouped_df (pd.api.typing.DataFrameGroupBy): DataFrameGroupBy with the following columns:
+        df (pd.DataFrame): DataFrame with the following columns:
             - 'peptide1': Peptide sequences.
             - 'peptide2': Peptide sequences.
             - 'label': Binary labels.

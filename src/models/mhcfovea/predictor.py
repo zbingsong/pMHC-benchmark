@@ -1,5 +1,4 @@
 import pandas as pd
-import pandas.core.groupby.generic as pd_typing
 import torch
 
 import os
@@ -30,140 +29,134 @@ class MHCfoveaPredictor(BasePredictor):
     @classmethod
     def run_retrieval(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         preds = {}
         labels = {}
         log50ks = {}
         times = []
 
-        for mhc_name, group in df:
-            if not mhc_name.startswith(('HLA-A', 'HLA-B', 'HLA-C')):
-                print(f'Unknown MHC name: {mhc_name}')
-                if cls._unknown_mhc == 'ignore':
-                    continue
-                elif cls._unknown_mhc == 'error':
-                    raise ValueError(f'Unknown MHC name: {mhc_name}')
-            
+        filtered = df
+        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
+        filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        if len(filtered) == 0:
+            print('No valid peptides')
+            return ({},), {}, {}, 0
+
+        df = filtered
+        input_df = pd.DataFrame({'sequence': df['peptide'], 'mhc': df['mhc_name'].transform(cls._format_mhc)})
+        input_df.to_csv('peptides_mhcfovea.csv', index=False)
+                
+        start_time = time.time_ns()
+        with SuppressStdout():
+            run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
+        end_time = time.time_ns()
+        assert run_result.returncode == 0
+        times.append(end_time - start_time)
+        try:
+            result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
+            assert len(result_df) == len(df), f'Length mismatch: {len(result_df)} vs {len(df)}'
+        except Exception as e:
+            raise e
+        
+        result_df['label'] = df['label']
+        if 'log50k' in df.columns:
+            result_df['log50k'] = df['log50k']
+        result_df['mhc'] = 'HLA-' + result_df['mhc'].str.replace('*', '')
+
+        for mhc_name, group in result_df.groupby('mhc'):
             pred = {}
             label = {}
             log50k = {}
-            # peptide should contain none of B, J, O, U, X, Z
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
-            # group = group[group['peptide'].str.len() <= 16]
-            group = group.reset_index(drop=True)
-            if len(group) == 0:
-                print(f'No valid peptides for {mhc_name}')
-                continue
-            if ':' in mhc_name:
-                mhc_formatted = mhc_name[4] + '*' + mhc_name[5:]
-            else:
-                mhc_formatted = mhc_name[4] + '*' + mhc_name[5:7] + ':' + mhc_name[7:]
-
-            print(f'Running retrieval for {mhc_name}')
-
-            input_df = pd.DataFrame({'sequence': group['peptide'], 'mhc': [mhc_formatted] * len(group)})
-            input_df.to_csv('peptides.csv', index=False)
-                    
-            start_time = time.time_ns()
-            with SuppressStdout():
-                run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/peptides.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
-            end_time = time.time_ns()
-            assert run_result.returncode == 0
-            times.append(end_time - start_time)
-            try:
-                result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
-                assert len(result_df) == len(group), f'Length mismatch: {len(result_df)} vs {len(group)} for {mhc_name}'
-            except Exception as e:
-                print(mhc_name, ' failed')
-                raise e
-            
-            result_df['label'] = group['label']
-            if 'log50k' in group.columns:
-                result_df['log50k'] = group['log50k']
             # print(result_df.columns)
-            grouped_by_len = result_df.groupby(result_df['sequence'].str.len())
+            grouped_by_len = group.groupby(group['sequence'].str.len())
             for length, subgroup in grouped_by_len:
                 # print(subgroup.columns)
-                pred[length] = torch.tensor((100 - subgroup['%rank']).tolist(), dtype=torch.double)
+                pred[length] = 100.0 - torch.tensor(subgroup['%rank'].tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
                 if 'log50k' in subgroup.columns:
                     log50k[length] = torch.tensor(subgroup['log50k'].tolist(), dtype=torch.double)
-            
+        
             preds[mhc_name] = pred
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('peptides.csv'):
-            os.remove('peptides.csv')
+        if os.path.exists('peptides_mhcfovea.csv'):
+            os.remove('peptides_mhcfovea.csv')
         return (preds,), labels, log50ks, sum(times)
     
     @classmethod
     def run_sq(
             cls, 
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
             
     @classmethod
     def run_sensitivity(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
         preds_diff = {}
         log50ks_diff = {}
 
-        for mhc_name, group in df:
-            if not mhc_name.startswith(('HLA-A', 'HLA-B', 'HLA-C')):
-                print(f'Unknown MHC name: {mhc_name}')
-                if cls._unknown_mhc == 'ignore':
-                    continue
-                elif cls._unknown_mhc == 'error':
-                    raise ValueError(f'Unknown MHC name: {mhc_name}')
-                
+        filtered = df
+        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
+        filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        if len(filtered) == 0:
+            print('No valid peptides')
+            return ({},), 0
+
+        input_df = pd.DataFrame({'sequence': pd.concat([df['peptide1'], df['peptide2']]), 'mhc': pd.concat([df['mhc_name'].transform(cls._format_mhc), df['mhc_name'].transform(cls._format_mhc)])})
+        input_df.to_csv('peptides_mhcfovea.csv', index=False)
+            
+        with SuppressStdout():
+            run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
+        assert run_result.returncode == 0
+        try:
+            result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
+            assert len(result_df) == 2 * len(df), f'Length mismatch: {len(result_df)} vs {2 * len(df)}'
+        except Exception as e:
+            raise e
+        
+        result_df1 = result_df.iloc[:len(df)].reset_index(drop=True)
+        result_df2 = result_df.iloc[len(df):].reset_index(drop=True)
+        result_df1.rename(columns={'%rank': '%rank1'}, inplace=True)
+        result_df1['log50k1'] = df['log50k1']
+        result_df1['%rank2'] = result_df2['%rank']
+        result_df1['log50k2'] = df['log50k2']
+        result_df1['mhc'] = 'HLA-' + result_df1['mhc'].str.replace('*', '')
+        # result_df1 now has columns: peptide1, %rank1, log50k1, peptide2, %rank2, log50k2, mhc
+
+        for mhc_name, group in result_df1.groupby('mhc'):
             pred_diff = {}
             log50k_diff = {}
-            group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
-            group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
-            # group = group[group['peptide1'].str.len() <= 16]
-            # group = group[group['peptide2'].str.len() <= 16]
-            group = group.reset_index(drop=True)
-            if len(group) == 0:
-                print(f'No valid peptides for {mhc_name}')
-                continue
-            mhc_formatted = mhc_name[4] + '*' + mhc_name[5:]
-
-            peptides1 = group['peptide1'].tolist()
-            peptides2 = group['peptide2'].tolist()
-            input_df = pd.DataFrame({'sequence': peptides1 + peptides2, 'mhc': [mhc_formatted] * (len(peptides1) + len(peptides2))})
-            input_df.to_csv('peptides.csv', index=False)
-            
-            with SuppressStdout():
-                run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/peptides.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
-            assert run_result.returncode == 0
-            try:
-                result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
-                assert len(result_df) == 2 * len(group), f'Length mismatch: {len(result_df)} vs {2 * len(group)} for {mhc_name}'
-            except Exception as e:
-                print(mhc_name, ' failed')
-                raise e
-            
-            result_df1 = result_df.iloc[:len(group)].reset_index(drop=True)
-            result_df2 = result_df.iloc[len(group):].reset_index(drop=True)
-            group['pred1'] = 100 - result_df1['%rank']
-            group['pred2'] = 100 - result_df2['%rank']
             grouped_by_len = group.groupby(group['peptide1'].str.len())
             for length, subgroup in grouped_by_len:
-                pred1 = torch.tensor(subgroup['pred1'].tolist(), dtype=torch.double)
-                pred2 = torch.tensor(subgroup['pred2'].tolist(), dtype=torch.double)
+                pred1 = 100.0 - torch.tensor(subgroup['%rank1'].tolist(), dtype=torch.double)
+                pred2 = 100.0 - torch.tensor(subgroup['%rank2'].tolist(), dtype=torch.double)
                 log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
                 log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
                 pred_diff[length] = pred1 - pred2
                 log50k_diff[length] = log50k1 - log50k2
 
-        preds_diff[mhc_name] = pred_diff
-        log50ks_diff[mhc_name] = log50k_diff
+            preds_diff[mhc_name] = pred_diff
+            log50ks_diff[mhc_name] = log50k_diff
 
-        if os.path.exists('peptides.csv'):
-            os.remove('peptides.csv')
+        if os.path.exists('peptides_mhcfovea.csv'):
+            os.remove('peptides_mhcfovea.csv')
         return (preds_diff,), log50ks_diff
+    
+    @classmethod
+    def _format_mhc(cls, mhc: str) -> str:
+        if ':' in mhc:
+            return mhc[4] + '*' + mhc[5:]
+        else:
+            return mhc[4] + '*' + mhc[5:7] + ':' + mhc[7:]

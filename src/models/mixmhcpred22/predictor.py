@@ -1,5 +1,4 @@
 import pandas as pd
-import pandas.core.groupby.generic as pd_typing
 import torch
 
 import os
@@ -28,8 +27,10 @@ class MixMHCpred22Predictor(BasePredictor):
     @classmethod
     def run_retrieval(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        df = df.groupby('mhc_name')
+        
         preds = {}
         labels = {}
         log50ks = {}
@@ -60,17 +61,17 @@ class MixMHCpred22Predictor(BasePredictor):
             mhc_formatted = mhc_name[4:].replace(':', '')
 
             peptides = group['peptide'].tolist()
-            with open(f'peptides.fasta', 'w') as f:
+            with open(f'peptides_mixmhcpred22.fasta', 'w') as f:
                 for peptide in peptides:
                     f.write(f'>{peptide}\n{peptide}\n')
                     
             start_time = time.time_ns()
-            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
+            run_result = subprocess.run([cls._executable, '-i', 'peptides_mixmhcpred22.fasta', '-o', 'result_mixmhcpred22.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
             end_time = time.time_ns()
             assert run_result.returncode == 0
             times.append(end_time - start_time)
             try:
-                result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
+                result_df = pd.read_csv('result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
             except Exception as e:
                 print(mhc_formatted, ' failed')
                 raise e
@@ -88,56 +89,53 @@ class MixMHCpred22Predictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('peptides.fasta'):
-            os.remove('peptides.fasta')
-            os.remove('result.tsv')
+        if os.path.exists('peptides_mixmhcpred22.fasta'):
+            os.remove('peptides_mixmhcpred22.fasta')
+            os.remove('result_mixmhcpred22.tsv')
         return (preds,), labels, log50ks, sum(times)
     
     @classmethod
     def run_sq(
             cls,
-            df: pd_typing.DataFrameGroupBy
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+            df: pd.DataFrame
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:       
         preds = {}
         labels = {}
         log50ks = {}
         times = []
 
-        mhcs = [mhc_name for mhc_name in df.groups.keys() if mhc_name.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
+        filtered = df
+        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
+        filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[filtered['peptide'].str.len() <= 14]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        if len(filtered) == 0:
+            print('No valid peptides')
+            return ({},), {}, {}, 0
+        
+        df = filtered.groupby('mhc_name')
+        mhcs = [mhc_name for mhc_name in df.groups.keys()]
         mhcs_formatted = [mhc_name[4:].replace(':', '') for mhc_name in mhcs]
-        print(f'Skipped unsupported MHCs: {len(df.groups.keys()) - len(mhcs)}')
 
-        min_peptide_nums = 1e12
-        max_peptide_nums = 0
         group_len = df.get_group(mhcs[0]).shape[0]
-
         for _, group in df:
-            group = group[(~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)) & (group['peptide'].str.len() <= 14)]
-            group = group[group['peptide'].str.len() <= 14]
-            if len(group) != group_len:
-                print('Skipped peptides:', group_len - len(group))
-                if len(group) == 0:
-                    print('No valid peptides')
-                    return ({},), {}, {}, 0
-            min_peptide_nums = min(min_peptide_nums, len(group))
-            max_peptide_nums = max(max_peptide_nums, len(group))
-            group.sort_values(by='peptide', inplace=True)
-            group.reset_index(drop=True, inplace=True)
-        assert min_peptide_nums == max_peptide_nums, f'Peptide numbers are not consistent: {min_peptide_nums} vs {max_peptide_nums}'
+            assert group.shape[0] == group_len, f'Peptide numbers mismatch: {group.shape[0]} vs {group_len}'
 
         peptides = df.get_group(mhcs[0])['peptide'].tolist()
 
-        with open(f'peptides.fasta', 'w') as f:
+        with open(f'peptides_mixmhcpred22.fasta', 'w') as f:
             for peptide in peptides:
                 f.write(f'>{peptide}\n{peptide}\n')
                 
         start_time = time.time_ns()
-        run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', ','.join(mhcs_formatted)], stdout=subprocess.DEVNULL)
+        run_result = subprocess.run([cls._executable, '-i', 'peptides_mixmhcpred22.fasta', '-o', 'result_mixmhcpred22.tsv', '-a', ','.join(mhcs_formatted)], stdout=subprocess.DEVNULL)
         end_time = time.time_ns()
         assert run_result.returncode == 0
         times.append(end_time - start_time)
         try:
-            result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
+            result_df = pd.read_csv('result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
         except Exception as e:
             print('sqaure dataframe failed')
             raise e
@@ -162,16 +160,18 @@ class MixMHCpred22Predictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('peptides.fasta'):
-            os.remove('peptides.fasta')
-            os.remove('result.tsv')
+        if os.path.exists('peptides_mixmhcpred22.fasta'):
+            os.remove('peptides_mixmhcpred22.fasta')
+            os.remove('result_mixmhcpred22.tsv')
         return (preds,), labels, log50ks, sum(times)
             
     @classmethod
     def run_sensitivity(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        df = df.groupby('mhc')
+        
         preds_diff = {}
         log50ks_diff = {}
 
@@ -200,15 +200,15 @@ class MixMHCpred22Predictor(BasePredictor):
 
             peptides1 = group['peptide1'].tolist()
             peptides2 = group['peptide2'].tolist()
-            with open(f'peptides.fasta', 'w') as f:
+            with open(f'peptides_mixmhcpred22.fasta', 'w') as f:
                 for peptide in peptides1:
                     f.write(f'>{peptide}\n{peptide}\n')
                 for peptide in peptides2:
                     f.write(f'>{peptide}\n{peptide}\n')
 
-            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
+            run_result = subprocess.run([cls._executable, '-i', 'peptides_mixmhcpred22.fasta', '-o', 'result_mixmhcpred22.tsv', '-a', mhc_formatted])
             assert run_result.returncode == 0
-            result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
+            result_df = pd.read_csv('result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
             result_df1 = result_df.iloc[:len(peptides1)].reset_index(drop=True)
             result_df2 = result_df.iloc[len(peptides1):].reset_index(drop=True)
 
@@ -231,6 +231,6 @@ class MixMHCpred22Predictor(BasePredictor):
             preds_diff[mhc_name] = pred_diff
             log50ks_diff[mhc_name] = log50k_diff
 
-        os.remove('peptides.fasta')
-        os.remove('result.tsv')
+        os.remove('peptides_mixmhcpred22.fasta')
+        os.remove('result_mixmhcpred22.tsv')
         return (preds_diff,), log50ks_diff

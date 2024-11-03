@@ -1,5 +1,4 @@
 import pandas as pd
-import pandas.core.groupby.generic as pd_typing
 import torch
 
 import subprocess
@@ -26,8 +25,10 @@ class NetMHCpanPredictor(BasePredictor):
     @classmethod
     def run_retrieval(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        df = df.groupby('mhc_name')
+
         BA_preds = {}
         EL_preds = {}
         labels = {}
@@ -46,15 +47,15 @@ class NetMHCpanPredictor(BasePredictor):
                 # if length > 14:
                 #     continue
                 peptides = subgroup['peptide'].tolist()
-                with open('peptides.txt', 'w') as file:
+                with open('peptides_netmhcpan.txt', 'w') as file:
                     for peptide in peptides:
                         file.write(peptide + '\n')
                 start_time = time.time_ns()
-                run_result = subprocess.run([cls._executable, '-p', 'peptides.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out.tsv'], stdout=subprocess.DEVNULL)
+                run_result = subprocess.run([cls._executable, '-p', 'peptides_netmhcpan.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
                 end_time = time.time_ns()
                 assert run_result.returncode == 0
 
-                result_df = pd.read_csv('out.tsv', sep='\t', skiprows=[0])
+                result_df = pd.read_csv('out_netmhcpan.tsv', sep='\t', skiprows=[0])
                 assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)} for {mhc_name}'
                 BA_pred[length] = 100 - torch.tensor(result_df['BA_Rank'].tolist(), dtype=torch.double)
                 EL_pred[length] = 100 - torch.tensor(result_df['EL_Rank'].tolist(), dtype=torch.double)
@@ -68,22 +69,24 @@ class NetMHCpanPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        os.remove('out.tsv')
-        os.remove('peptides.txt')
+        os.remove('out_netmhcpan.tsv')
+        os.remove('peptides_netmhcpan.txt')
         return (BA_preds, EL_preds), labels, log50ks, sum(times)
     
     @classmethod
     def run_sq(
             cls, 
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
 
     @classmethod
     def run_sensitivity(
             cls,
-            df: pd_typing.DataFrameGroupBy
+            df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        df = df.groupby('mhc_name')
+
         BA_preds_diff = {}
         EL_preds_diff = {}
         log50ks_diff = {}
@@ -98,20 +101,20 @@ class NetMHCpanPredictor(BasePredictor):
             for length, subgroup in grouped_by_len:
                 peptides1 = subgroup['peptide1'].tolist()
                 peptides2 = subgroup['peptide2'].tolist()
-                with open('peptides1.txt', 'w') as file:
+                with open('peptides1_netmhcpan.txt', 'w') as file:
                     for peptide in peptides1:
                         file.write(peptide + '\n')
-                with open('peptides2.txt', 'w') as file:
+                with open('peptides2_netmhcpan.txt', 'w') as file:
                     for peptide in peptides2:
                         file.write(peptide + '\n')
-                process1 = subprocess.Popen([cls._executable, '-p', 'peptides1.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out1.tsv'], stdout=subprocess.DEVNULL)
-                process2 = subprocess.Popen([cls._executable, '-p', 'peptides2.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out2.tsv'], stdout=subprocess.DEVNULL)
+                process1 = subprocess.Popen([cls._executable, '-p', 'peptides1_netmhcpan.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out1_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
+                process2 = subprocess.Popen([cls._executable, '-p', 'peptides2_netmhcpan.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', 'out2_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
                 process1.wait()
                 process2.wait()
                 assert process1.returncode == 0 and process2.returncode == 0
 
-                result_df1 = pd.read_csv('out1.tsv', sep='\t', skiprows=[0])
-                result_df2 = pd.read_csv('out2.tsv', sep='\t', skiprows=[0])
+                result_df1 = pd.read_csv('out1_netmhcpan.tsv', sep='\t', skiprows=[0])
+                result_df2 = pd.read_csv('out2_netmhcpan.tsv', sep='\t', skiprows=[0])
                 assert len(result_df1) == len(subgroup), f'Length mismatch: {len(result_df1)} != {len(subgroup)} for {mhc_name}'
                 assert len(result_df2) == len(subgroup), f'Length mismatch: {len(result_df2)} != {len(subgroup)} for {mhc_name}'
                 
@@ -130,8 +133,8 @@ class NetMHCpanPredictor(BasePredictor):
             EL_preds_diff[mhc_name] = EL_pred_diff
             log50ks_diff[mhc_name] = log50k_diff
 
-        os.remove('out1.tsv')
-        os.remove('out2.tsv')
-        os.remove('peptides1.txt')
-        os.remove('peptides2.txt')
+        os.remove('out1_netmhcpan.tsv')
+        os.remove('out2_netmhcpan.tsv')
+        os.remove('peptides1_netmhcpan.txt')
+        os.remove('peptides2_netmhcpan.txt')
         return (BA_preds_diff, EL_preds_diff), log50ks_diff
