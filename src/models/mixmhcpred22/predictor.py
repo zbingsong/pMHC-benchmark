@@ -127,8 +127,6 @@ class MixMHCpred22Predictor(BasePredictor):
 
         peptides = df.get_group(mhcs[0])['peptide'].tolist()
 
-        
-
         with open(f'peptides.fasta', 'w') as f:
             for peptide in peptides:
                 f.write(f'>{peptide}\n{peptide}\n')
@@ -187,42 +185,51 @@ class MixMHCpred22Predictor(BasePredictor):
                 
             pred_diff = {}
             log50k_diff = {}
-            group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
-            group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
-            group = group.reset_index(drop=True)
+            filtered = group
+            filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+            filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+            filtered = filtered[filtered['peptide1'].str.len() <= 14]
+            filtered = filtered[filtered['peptide2'].str.len() <= 14]
+            filtered = filtered.reset_index(drop=True)
+            if len(group) != len(filtered):
+                print('Skipped peptides:', len(group) - len(filtered))
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
                 continue
-            grouped_by_len = group.groupby(group['peptide1'].str.len())
             mhc_formatted = mhc_name[4:].replace(':', '')
 
-            for length, subgroup in grouped_by_len:
-                peptides1 = subgroup['peptide1'].tolist()
-                with open(f'peptides.fasta', 'w') as f:
-                    for peptide in peptides1:
-                        f.write(f'>{peptide}\n{peptide}\n')
+            peptides1 = group['peptide1'].tolist()
+            peptides2 = group['peptide2'].tolist()
+            with open(f'peptides.fasta', 'w') as f:
+                for peptide in peptides1:
+                    f.write(f'>{peptide}\n{peptide}\n')
+                for peptide in peptides2:
+                    f.write(f'>{peptide}\n{peptide}\n')
 
-                run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
-                assert run_result.returncode == 0
-                result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
-                pred1 = torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double)
-                log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
+            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
+            assert run_result.returncode == 0
+            result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
+            result_df1 = result_df.iloc[:len(peptides1)].reset_index(drop=True)
+            result_df2 = result_df.iloc[len(peptides1):].reset_index(drop=True)
 
-                peptides2 = subgroup['peptide2'].tolist()
-                with open(f'peptides.fasta', 'w') as f:
-                    for peptide in peptides2:
-                        f.write(f'>{peptide}\n{peptide}\n')
-                run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted])
-                assert run_result.returncode == 0
-                result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
-                pred2 = torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
+            result_df1['log50k'] = group['log50k1']
+            result_df2['log50k'] = group['log50k2']
 
+            grouped_by_len1 = result_df1.groupby(result_df1['Peptide'].str.len())
+            grouped_by_len2 = result_df2.groupby(result_df2['Peptide'].str.len())
+
+            for length in grouped_by_len1.groups.keys():
+                subgroup1 = grouped_by_len1.get_group(length)
+                subgroup2 = grouped_by_len2.get_group(length)
+                pred1 = torch.tensor((1 - subgroup1['%Rank_bestAllele']).tolist(), dtype=torch.double)
+                log50k1 = torch.tensor(subgroup1['log50k1'].tolist(), dtype=torch.double)
+                pred2 = torch.tensor((1 - subgroup2['%Rank_bestAllele']).tolist(), dtype=torch.double)
+                log50k2 = torch.tensor(subgroup2['log50k2'].tolist(), dtype=torch.double)
                 pred_diff[length] = pred1 - pred2
                 log50k_diff[length] = log50k1 - log50k2
 
-        preds_diff[mhc_name] = pred_diff
-        log50ks_diff[mhc_name] = log50k_diff
+            preds_diff[mhc_name] = pred_diff
+            log50ks_diff[mhc_name] = log50k_diff
 
         os.remove('peptides.fasta')
         os.remove('result.tsv')
