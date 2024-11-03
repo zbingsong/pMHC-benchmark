@@ -47,7 +47,7 @@ def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
     predictions (torch.FloatTensor): tensor of shape (n, ), containing the cosine similarities between MHC and peptide pairs
     '''
     # Plot histogram of test predictions
-    plt.hist(predictions.float(), bins=200, range=(-1, 1))
+    plt.hist(predictions.float(), bins=200)
     plt.xlabel('EL Score')
     plt.ylabel('Frequency')
     plt.savefig(name)
