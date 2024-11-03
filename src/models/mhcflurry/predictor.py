@@ -82,8 +82,8 @@ class MHCflurryPredictor(BasePredictor):
                     result_df = cls._predictor.predict(peptides, [formatted_mhc_name], verbose=0, include_affinity_percentile=True)
                 end_time = time.time_ns()
 
-                affinity_pred[length] = 1 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
-                presentation_pred[length] = torch.tensor(result_df['presentation_score'].tolist(), dtype=torch.double)
+                affinity_pred[length] = 1.0 - torch.log(torch.tensor(result_df['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
+                presentation_pred[length] = 100.0 - torch.tensor(result_df['presentation_percentile'].tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
                 if 'log50k' in subgroup.columns:
                     log50k[length] = torch.tensor(subgroup['log50k'].tolist(), dtype=torch.double)
