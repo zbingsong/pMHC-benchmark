@@ -87,7 +87,6 @@ def main(model_name: str):
         if 'log50k' in df.columns:
             df = df.astype({'log50k': float})
             if_reg = True
-        df = df.groupby('mhc_name')
         # start_time = time.time_ns()
         predictions, labels, log50ks, time_taken = predictor.run_retrieval(df)
         # end_time = time.time_ns()
@@ -101,7 +100,6 @@ def main(model_name: str):
     for filename in filenames_sq:
         df = pd.read_csv(f'{data_dir}/{filename}')
         df = df.astype({'label': int})
-        df = df.groupby('mhc_name')
         predictions, labels, log50ks, time_taken = predictor.run_sq(df)
         for prediction, task in zip(predictions, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
@@ -111,7 +109,6 @@ def main(model_name: str):
     for filename in filenames_sensitivity:
         df = pd.read_csv(f'{data_dir}/{filename}')
         df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
-        df = df.groupby('mhc_name')
         prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
         for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
