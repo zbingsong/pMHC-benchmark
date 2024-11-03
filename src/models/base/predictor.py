@@ -39,6 +39,31 @@ class BasePredictor(abc.ABC):
                 - Total runtime in nanoseconds.
         '''
         raise NotImplementedError
+    
+    @classmethod
+    @abc.abstractmethod
+    def run_sq(
+            cls, 
+            df: pd_typing.DataFrameGroupBy
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        '''
+        Run the predictor on the given DataFrameGroupBy, from a square dataset (i.e. every MHC is paired with every peptide).
+
+        Parameters:
+        df (pd.api.typing.DataFrameGroupBy): DataFrameGroupBy with the following columns:
+            - 'peptide': Peptide sequences.
+            - 'label': Binary labels.
+            - 'log50k' (optional): Log50k values.
+        
+        Returns:
+        tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+            - Retrieval result, where metrics are computed per MHC and per peptide length.
+                - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) of dicts (key=peptide length).
+                - Labels as a dict (key=MHC names) of dicts (key=peptide length).
+                - Log50k values as a dict (key=MHC names) of dicts (key=peptide length), if available; otherwise the second layer dicts are empty.
+                - Total runtime in nanoseconds.
+        '''
+        raise NotImplementedError
 
     @classmethod
     @abc.abstractmethod

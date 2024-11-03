@@ -71,6 +71,13 @@ class NetMHCpanPredictor(BasePredictor):
         os.remove('out.tsv')
         os.remove('peptides.txt')
         return (BA_preds, EL_preds), labels, log50ks, sum(times)
+    
+    @classmethod
+    def run_sq(
+            cls, 
+            df: pd_typing.DataFrameGroupBy
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        return cls.run_retrieval(df)
 
     @classmethod
     def run_sensitivity(

@@ -1,5 +1,6 @@
 {
     "filelist_path": "files.txt",
+    "filelist_sq_path": "files_sq.txt",
     "filelist_sensitivity_path": "files_sensitivity.txt",
     "data_dir": "/mnt/c/Users/26352/Documents/repo/data_pmhc/benchmark",
     "output_dir": "outputs"

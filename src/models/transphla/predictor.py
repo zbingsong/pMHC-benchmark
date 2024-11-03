@@ -96,6 +96,13 @@ class TransPHLAPredictor(BasePredictor):
             os.remove('mhcs.fasta')
             os.remove('peptides.fasta')
         return (preds,), labels, log50ks, sum(times)
+    
+    @classmethod
+    def run_sq(
+            cls, 
+            df: pd_typing.DataFrameGroupBy
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        return cls.run_retrieval(df)
             
     @classmethod
     def run_sensitivity(

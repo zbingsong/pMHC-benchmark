@@ -55,6 +55,7 @@ def main(model_name: str):
     with open('configs.json', 'r') as f:
         configs = json.load(f)
         filelist_path = configs['filelist_path']
+        filelist_sq_path = configs['filelist_sq_path']
         filelist_sensitivity_path = configs['filelist_sensitivity_path']
         data_dir = configs['data_dir']
         output_dir = configs['output_dir']
@@ -64,6 +65,12 @@ def main(model_name: str):
         for line in f:
             if line.strip() != '' and line[0] != '#':
                 filenames.append(line.strip())
+
+    filenames_sq = []
+    with open(filelist_sq_path, 'r') as f:
+        for line in f:
+            if line.strip() != '' and line[0] != '#':
+                filenames_sq.append(line.strip())
     
     filenames_sensitivity = []
     with open(filelist_sensitivity_path, 'r') as f:
@@ -89,6 +96,16 @@ def main(model_name: str):
             src.test_retrieval(prediction, labels, time_taken, name)
             if if_reg:
                 src.test_regression(prediction, log50ks, name)
+
+    # sqaure dataset
+    for filename in filenames_sq:
+        df = pd.read_csv(f'{data_dir}/{filename}')
+        df = df.astype({'label': int})
+        df = df.groupby('mhc_name')
+        predictions, labels, log50ks, time_taken = predictor.run_sq(df)
+        for prediction, task in zip(predictions, predictor.tasks):
+            name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
+            src.test_retrieval(prediction, labels, time_taken, name)
 
     # test sensitivity
     for filename in filenames_sensitivity:

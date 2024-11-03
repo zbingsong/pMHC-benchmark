@@ -49,34 +49,39 @@ class MixMHCpred30Predictor(BasePredictor):
             label = {}
             log50k = {}
             # peptide should contain none of B, J, O, U, X, Z
-            group = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
+            filtered = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
+            filtered = filtered[filtered['peptide'].str.len() <= 14]
+            filtered = filtered.reset_index(drop=True)
+            if len(group) != len(filtered):
+                print('Skipped peptides:', len(group) - len(filtered))
+            group = filtered
             if len(group) == 0:
                 print(f'No valid peptides for {mhc_name}')
                 continue
-            grouped_by_len = group.groupby(group['peptide'].str.len())
+
             mhc_formatted = mhc_name[4:].replace(':', '')
 
+            peptides = group['peptide'].tolist()
+            with open(f'peptides.fasta', 'w') as f:
+                for peptide in peptides:
+                    f.write(f'>{peptide}\n{peptide}\n')
+                    
+            start_time = time.time_ns()
+            run_result = subprocess.run([cls._executable, '-i', 'peptides.fasta', '-o', 'result.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
+            end_time = time.time_ns()
+            assert run_result.returncode == 0
+            times.append(end_time - start_time)
+            try:
+                result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
+            except Exception as e:
+                print(mhc_formatted, ' failed')
+                raise e
+            result_df['label'] = group['label']
+            if 'log50k' in group.columns:
+                result_df['log50k'] = group['log50k']
+            grouped_by_len = result_df.groupby(result_df['Peptide'].str.len())
             for length, subgroup in grouped_by_len:
-                if length > 14:
-                    print(f'Peptide length {length} is too long for {mhc_name}')
-                    continue
-                peptides = subgroup['peptide'].tolist()
-                with open(f'peptides.txt', 'w') as f:
-                    for peptide in peptides:
-                        f.write(f'{peptide}\n')
-                        
-                start_time = time.time_ns()
-                run_result = subprocess.run([cls._executable, '-i', 'peptides.txt', '-o', 'result.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
-                end_time = time.time_ns()
-                assert run_result.returncode == 0
-                times.append(end_time - start_time)
-                try:
-                    result_df = pd.read_csv('result.tsv', sep='\t', skiprows=list(range(11)))
-                    assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} vs {len(subgroup)} for {mhc_name}'
-                except Exception as e:
-                    print(mhc_name, ' failed')
-                    raise e
-                pred[length] = torch.tensor((1 - result_df['%Rank_bestAllele']).tolist(), dtype=torch.double)
+                pred[length] = torch.tensor((1 - subgroup['%Rank_bestAllele']).tolist(), dtype=torch.double)
                 label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
                 if 'log50k' in subgroup.columns:
                     log50k[length] = torch.tensor(subgroup['log50k'].tolist(), dtype=torch.double)
@@ -89,6 +94,13 @@ class MixMHCpred30Predictor(BasePredictor):
             os.remove('peptides.txt')
             os.remove('result.tsv')
         return (preds,), labels, log50ks, sum(times)
+    
+    @classmethod
+    def run_sq(
+            cls, 
+            df: pd_typing.DataFrameGroupBy
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        return cls.run_retrieval(df)
             
     @classmethod
     def run_sensitivity(
