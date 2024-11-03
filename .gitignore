@@ -167,3 +167,4 @@ peptides.fasta
 peptides.txt
 *.tsv
 *.ipynb
+*.fasta
