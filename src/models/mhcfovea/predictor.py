@@ -7,17 +7,19 @@ import json
 import time
 import pathlib
 
-from . import BasePredictor, SuppressStdout
+from . import BasePredictor, PredictorConfigs, SuppressStdout
 
 
 class MHCfoveaPredictor(BasePredictor):
     tasks = None
     _exe_dir = None
+    _temp_dir = None
     _unknown_mhc = None
     _wd = None
 
     @classmethod
-    def load(cls) -> None:
+    def load(cls, predictor_configs: PredictorConfigs) -> None:
+        cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['EL']
         cls._wd = os.getcwd()
         curr_dir = pathlib.Path(__file__).parent
@@ -48,11 +50,11 @@ class MHCfoveaPredictor(BasePredictor):
 
         df = filtered
         input_df = pd.DataFrame({'sequence': df['peptide'], 'mhc': df['mhc_name'].transform(cls._format_mhc)})
-        input_df.to_csv('peptides_mhcfovea.csv', index=False)
+        input_df.to_csv(f'{cls._temp_dir}/peptides_mhcfovea.csv', index=False)
                 
         start_time = time.time_ns()
         with SuppressStdout():
-            run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
+            run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/{cls._temp_dir}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
         end_time = time.time_ns()
         assert run_result.returncode == 0
         times.append(end_time - start_time)
@@ -84,8 +86,8 @@ class MHCfoveaPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('peptides_mhcfovea.csv'):
-            os.remove('peptides_mhcfovea.csv')
+        # if os.path.exists('peptides_mhcfovea.csv'):
+        #     os.remove('peptides_mhcfovea.csv')
         return (preds,), labels, log50ks, sum(times)
     
     @classmethod
@@ -100,7 +102,10 @@ class MHCfoveaPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        if_ba = 'log50k1' in df.columns
+
         preds_diff = {}
+        labels_diff = {}
         log50ks_diff = {}
 
         filtered = df
@@ -115,10 +120,10 @@ class MHCfoveaPredictor(BasePredictor):
             return ({},), 0
 
         input_df = pd.DataFrame({'sequence': pd.concat([df['peptide1'], df['peptide2']]), 'mhc': pd.concat([df['mhc_name'].transform(cls._format_mhc), df['mhc_name'].transform(cls._format_mhc)])})
-        input_df.to_csv('peptides_mhcfovea.csv', index=False)
+        input_df.to_csv(f'{cls._temp_dir}/peptides_mhcfovea.csv', index=False)
             
         with SuppressStdout():
-            run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
+            run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/{cls._temp_dir}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
         assert run_result.returncode == 0
         try:
             result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
@@ -137,22 +142,32 @@ class MHCfoveaPredictor(BasePredictor):
 
         for mhc_name, group in result_df1.groupby('mhc'):
             pred_diff = {}
+            label_diff = {}
             log50k_diff = {}
             grouped_by_len = group.groupby(group['peptide1'].str.len())
             for length, subgroup in grouped_by_len:
                 pred1 = 100.0 - torch.tensor(subgroup['%rank1'].tolist(), dtype=torch.double)
                 pred2 = 100.0 - torch.tensor(subgroup['%rank2'].tolist(), dtype=torch.double)
-                log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
                 pred_diff[length] = pred1 - pred2
-                log50k_diff[length] = log50k1 - log50k2
+                if if_ba:
+                    log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
+                    log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
+                    log50k_diff[length] = log50k1 - log50k2
+                else:
+                    label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
+                    label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
+                    label_diff[length] = label1 - label2
 
             preds_diff[mhc_name] = pred_diff
+            labels_diff[mhc_name] = label_diff
             log50ks_diff[mhc_name] = log50k_diff
 
-        if os.path.exists('peptides_mhcfovea.csv'):
-            os.remove('peptides_mhcfovea.csv')
-        return (preds_diff,), log50ks_diff
+        # if os.path.exists('peptides_mhcfovea.csv'):
+        #     os.remove('peptides_mhcfovea.csv')
+        if if_ba:
+            return (preds_diff,), log50ks_diff
+        else:
+            return (preds_diff,), labels_diff
     
     @classmethod
     def _format_mhc(cls, mhc: str) -> str:

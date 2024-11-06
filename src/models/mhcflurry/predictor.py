@@ -110,15 +110,19 @@ class MHCflurryPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        if_ba = 'log50k1' in df.columns
+
         df = df.groupby('mhc_name')
 
         affinity_preds_diff = {}
         presentation_preds_diff = {}
+        labels_diff = {}
         log50ks_diff = {}
 
         for mhc_name, group in df:
             affinity_pred_diff = {}
             presentation_pred_diff = {}
+            label_diff = {}
             log50k_diff = {}
             group = group.reset_index(drop=True)
             grouped_by_len = group.groupby(group['peptide1'].str.len())
@@ -134,17 +138,25 @@ class MHCflurryPredictor(BasePredictor):
                     continue
                 affinity_pred1 = 1 - torch.log(torch.tensor(result_df1['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
                 affinity_pred2 = 1 - torch.log(torch.tensor(result_df2['affinity'].tolist(), dtype=torch.double)) / cls._log50k_base
+                affinity_pred_diff[length] = affinity_pred1 - affinity_pred2
                 presentation_pred1 = torch.tensor(result_df1['presentation_score'].tolist(), dtype=torch.double)
                 presentation_pred2 = torch.tensor(result_df2['presentation_score'].tolist(), dtype=torch.double)
-                log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
-
-                affinity_pred_diff[length] = affinity_pred1 - affinity_pred2
                 presentation_pred_diff[length] = presentation_pred1 - presentation_pred2
-                log50k_diff[length] = log50k1 - log50k2
+                if if_ba:
+                    log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
+                    log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
+                    log50k_diff[length] = log50k1 - log50k2
+                else:
+                    label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
+                    label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
+                    label_diff[length] = label1 - label2
 
         affinity_preds_diff[mhc_name] = affinity_pred_diff
         presentation_preds_diff[mhc_name] = presentation_pred_diff
+        labels_diff[mhc_name] = label_diff
         log50ks_diff[mhc_name] = log50k_diff
 
-        return (presentation_preds_diff, affinity_preds_diff), log50ks_diff
+        if if_ba:
+            return (presentation_preds_diff, affinity_preds_diff), log50ks_diff
+        else:
+            return (presentation_preds_diff, affinity_preds_diff), labels_diff

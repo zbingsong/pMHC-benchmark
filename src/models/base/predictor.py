@@ -1,14 +1,25 @@
 import pandas as pd
 import torch
-import abc
 
+import abc
+import dataclasses
+
+
+@dataclasses.dataclass
+class PredictorConfigs(object):
+    '''
+    Dataclass for loading predictor, same configs for all predictors
+    '''
+    temp_dir: str
+    # log_dir: str
+    
 
 class BasePredictor(abc.ABC):
     tasks = None
 
     @classmethod
     @abc.abstractmethod
-    def load(cls) -> None:
+    def load(cls, predictor_configs: PredictorConfigs) -> None:
         '''
         Set tasks and other predictor-specific attributes.
         Must be called before run() or run_sensitivity().
@@ -80,14 +91,12 @@ class BasePredictor(abc.ABC):
         df (pd.DataFrame): DataFrame with the following columns:
             - 'peptide1': Peptide sequences.
             - 'peptide2': Peptide sequences.
-            - 'label': Binary labels.
-            - 'log50k' (optional): Log50k values.
+            - 'label': Binary labels, or 'log50k': Log50k values.
         
         Returns:
         tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
             - Sensitivity result, where metrics are computed per MHC and per peptide length.
-                - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) of dicts (key=peptide length).
-                - Log50k values as a dict (key=MHC names) of dicts (key=peptide length).
+                - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) of dicts (key=peptide length) containg differences in predictions.
+                - Label or Log50k values as a dict (key=MHC names) of dicts (key=peptide length) containg differences in labels or log50ks, depending on input dataframe.
         '''
         raise NotImplementedError
-    

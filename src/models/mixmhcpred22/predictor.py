@@ -7,16 +7,18 @@ import json
 import time
 import pathlib
 
-from . import BasePredictor
+from . import BasePredictor, PredictorConfigs
 
 
 class MixMHCpred22Predictor(BasePredictor):
     tasks = None
+    _temp_dir = None
     _executable = None
     _unknown_mhc = None
 
     @classmethod
-    def load(cls) -> None:
+    def load(cls, predictor_configs: PredictorConfigs) -> None:
+        cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['EL']
         curr_dir = pathlib.Path(__file__).parent
         with open(f'{curr_dir}/configs.json', 'r') as f:
@@ -61,17 +63,17 @@ class MixMHCpred22Predictor(BasePredictor):
             mhc_formatted = mhc_name[4:].replace(':', '')
 
             peptides = group['peptide'].tolist()
-            with open(f'peptides_mixmhcpred22.fasta', 'w') as f:
+            with open(f'{cls._temp_dir}/peptides_mixmhcpred22.fasta', 'w') as f:
                 for peptide in peptides:
                     f.write(f'>{peptide}\n{peptide}\n')
                     
             start_time = time.time_ns()
-            run_result = subprocess.run([cls._executable, '-i', 'peptides_mixmhcpred22.fasta', '-o', 'result_mixmhcpred22.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
+            run_result = subprocess.run([cls._executable, '-i', f'{cls._temp_dir}/peptides_mixmhcpred22.fasta', '-o', f'{cls._temp_dir}result_mixmhcpred22.tsv', '-a', mhc_formatted], stdout=subprocess.DEVNULL)
             end_time = time.time_ns()
             assert run_result.returncode == 0
             times.append(end_time - start_time)
             try:
-                result_df = pd.read_csv('result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
+                result_df = pd.read_csv(f'{cls._temp_dir}/result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
             except Exception as e:
                 print(mhc_formatted, ' failed')
                 raise e
@@ -89,16 +91,16 @@ class MixMHCpred22Predictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('peptides_mixmhcpred22.fasta'):
-            os.remove('peptides_mixmhcpred22.fasta')
-            os.remove('result_mixmhcpred22.tsv')
+        # if os.path.exists('peptides_mixmhcpred22.fasta'):
+        #     os.remove('peptides_mixmhcpred22.fasta')
+        #     os.remove('result_mixmhcpred22.tsv')
         return (preds,), labels, log50ks, sum(times)
     
     @classmethod
     def run_sq(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:       
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         preds = {}
         labels = {}
         log50ks = {}
@@ -125,17 +127,17 @@ class MixMHCpred22Predictor(BasePredictor):
 
         peptides = df.get_group(mhcs[0])['peptide'].tolist()
 
-        with open(f'peptides_mixmhcpred22.fasta', 'w') as f:
+        with open(f'{cls._temp_dir}/peptides_mixmhcpred22.fasta', 'w') as f:
             for peptide in peptides:
                 f.write(f'>{peptide}\n{peptide}\n')
                 
         start_time = time.time_ns()
-        run_result = subprocess.run([cls._executable, '-i', 'peptides_mixmhcpred22.fasta', '-o', 'result_mixmhcpred22.tsv', '-a', ','.join(mhcs_formatted)], stdout=subprocess.DEVNULL)
+        run_result = subprocess.run([cls._executable, '-i', f'{cls._temp_dir}/peptides_mixmhcpred22.fasta', '-o', f'{cls._temp_dir}/result_mixmhcpred22.tsv', '-a', ','.join(mhcs_formatted)], stdout=subprocess.DEVNULL)
         end_time = time.time_ns()
         assert run_result.returncode == 0
         times.append(end_time - start_time)
         try:
-            result_df = pd.read_csv('result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
+            result_df = pd.read_csv(f'{cls._temp_dir}/result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
         except Exception as e:
             print('sqaure dataframe failed')
             raise e
@@ -160,9 +162,9 @@ class MixMHCpred22Predictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('peptides_mixmhcpred22.fasta'):
-            os.remove('peptides_mixmhcpred22.fasta')
-            os.remove('result_mixmhcpred22.tsv')
+        # if os.path.exists('peptides_mixmhcpred22.fasta'):
+        #     os.remove('peptides_mixmhcpred22.fasta')
+        #     os.remove('result_mixmhcpred22.tsv')
         return (preds,), labels, log50ks, sum(times)
             
     @classmethod
@@ -170,9 +172,12 @@ class MixMHCpred22Predictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        if_ba = 'log50k1' in df.columns
+
         df = df.groupby('mhc')
         
         preds_diff = {}
+        labels_diff = {}
         log50ks_diff = {}
 
         for mhc_name, group in df:
@@ -184,7 +189,9 @@ class MixMHCpred22Predictor(BasePredictor):
                     raise ValueError(f'Unknown MHC name: {mhc_name}')
                 
             pred_diff = {}
+            label_diff = {}
             log50k_diff = {}
+
             filtered = group
             filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
             filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -200,20 +207,23 @@ class MixMHCpred22Predictor(BasePredictor):
 
             peptides1 = group['peptide1'].tolist()
             peptides2 = group['peptide2'].tolist()
-            with open(f'peptides_mixmhcpred22.fasta', 'w') as f:
+            with open(f'{cls._temp_dir}/peptides_mixmhcpred22.fasta', 'w') as f:
                 for peptide in peptides1:
                     f.write(f'>{peptide}\n{peptide}\n')
                 for peptide in peptides2:
                     f.write(f'>{peptide}\n{peptide}\n')
 
-            run_result = subprocess.run([cls._executable, '-i', 'peptides_mixmhcpred22.fasta', '-o', 'result_mixmhcpred22.tsv', '-a', mhc_formatted])
+            run_result = subprocess.run([cls._executable, '-i', f'{cls._temp_dir}/peptides_mixmhcpred22.fasta', '-o', f'{cls._temp_dir}/result_mixmhcpred22.tsv', '-a', mhc_formatted])
             assert run_result.returncode == 0
-            result_df = pd.read_csv('result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
+            result_df = pd.read_csv(f'{cls._temp_dir}/result_mixmhcpred22.tsv', sep='\t', skiprows=list(range(11)))
             result_df1 = result_df.iloc[:len(peptides1)].reset_index(drop=True)
             result_df2 = result_df.iloc[len(peptides1):].reset_index(drop=True)
-
-            result_df1['log50k'] = group['log50k1']
-            result_df2['log50k'] = group['log50k2']
+            if if_ba:
+                result_df1['log50k'] = group['log50k1']
+                result_df2['log50k'] = group['log50k2']
+            else:
+                result_df1['label'] = group['label1']
+                result_df2['label'] = group['label2']
 
             grouped_by_len1 = result_df1.groupby(result_df1['Peptide'].str.len())
             grouped_by_len2 = result_df2.groupby(result_df2['Peptide'].str.len())
@@ -222,15 +232,24 @@ class MixMHCpred22Predictor(BasePredictor):
                 subgroup1 = grouped_by_len1.get_group(length)
                 subgroup2 = grouped_by_len2.get_group(length)
                 pred1 = torch.tensor((1 - subgroup1['%Rank_bestAllele']).tolist(), dtype=torch.double)
-                log50k1 = torch.tensor(subgroup1['log50k1'].tolist(), dtype=torch.double)
                 pred2 = torch.tensor((1 - subgroup2['%Rank_bestAllele']).tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(subgroup2['log50k2'].tolist(), dtype=torch.double)
                 pred_diff[length] = pred1 - pred2
-                log50k_diff[length] = log50k1 - log50k2
+                if if_ba:
+                    log50k1 = torch.tensor(subgroup1['log50k'].tolist(), dtype=torch.double)
+                    log50k2 = torch.tensor(subgroup2['log50k'].tolist(), dtype=torch.double)
+                    log50k_diff[length] = log50k1 - log50k2
+                else:
+                    label1 = torch.tensor(subgroup1['label'].tolist(), dtype=torch.long)
+                    label2 = torch.tensor(subgroup2['label'].tolist(), dtype=torch.long)
+                    label_diff[mhc_name] = label1 - label2
 
             preds_diff[mhc_name] = pred_diff
+            labels_diff[mhc_name] = label_diff
             log50ks_diff[mhc_name] = log50k_diff
 
-        os.remove('peptides_mixmhcpred22.fasta')
-        os.remove('result_mixmhcpred22.tsv')
-        return (preds_diff,), log50ks_diff
+        # os.remove('peptides_mixmhcpred22.fasta')
+        # os.remove('result_mixmhcpred22.tsv')
+        if if_ba:
+            return (preds_diff,), log50ks_diff
+        else:
+            return (preds_diff,), labels_diff

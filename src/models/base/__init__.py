@@ -1,2 +1,2 @@
-from .predictor import BasePredictor
-from .utils import *
+from .predictor import BasePredictor, PredictorConfigs
+from .utils import SuppressStdout

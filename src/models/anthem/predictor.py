@@ -9,18 +9,20 @@ import pathlib
 import glob
 import shutil
 
-from . import BasePredictor
+from . import BasePredictor, PredictorConfigs
 
 
 class AnthemPredictor(BasePredictor):
     tasks = None
     _exe_dir = None
+    _temp_dir = None
     _unknown_mhc = None
     _unknown_peptide = None
     _wd = None
 
     @classmethod
-    def load(cls) -> None:
+    def load(cls, predictor_configs: PredictorConfigs) -> None:
+        cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['Mix']
         cls._wd = os.getcwd()
         curr_dir = pathlib.Path(__file__).parent
@@ -77,12 +79,12 @@ class AnthemPredictor(BasePredictor):
                     num_skipped += len(subgroup)
                     continue
                 peptides = subgroup['peptide'].tolist()
-                with open('peptides_anthem.txt', 'w') as f:
+                with open(f'{cls._temp_dir}/peptides_anthem.txt', 'w') as f:
                     for peptide in peptides:
                         f.write(f'{peptide}\n')
 
                 start_time = time.time_ns()
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/peptides_anthem.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_anthem.txt'], cwd=cls._exe_dir)
                 end_time = time.time_ns()
 
                 try:
@@ -126,7 +128,7 @@ class AnthemPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        os.remove('peptides_anthem.txt')
+        # os.remove('peptides_anthem.txt')
         print(f'Skipped {num_skipped} peptides')
         return (preds,), labels, log50ks, sum(times)
     
@@ -142,14 +144,19 @@ class AnthemPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        if_ba = 'log50k1' in df.columns
+
         df = df.groupby('mhc_name')
         
         preds_diff = {}
+        labels_diff = {}
         log50ks_diff = {}
 
         for mhc_name, group in df:
             pred_diff = {}
+            label_diff = {}
             log50k_diff = {}
+
             group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
             group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
             group = group.reset_index(drop=True)
@@ -165,12 +172,11 @@ class AnthemPredictor(BasePredictor):
                 mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
 
             for length, subgroup in grouped_by_len:
-                with open(f'peptides_anthem.txt', 'w') as f:
+                with open(f'{cls._temp_dir}/peptides_anthem.txt', 'w') as f:
                     for row in subgroup.itertuples():
                         f.write(f'{row.peptide1}\n{row.peptide2}\n')
-                wd = os.getcwd()
 
-                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{wd}/peptides_anthem.txt'], cwd=cls._exe_dir)
+                run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_anthem.txt'], cwd=cls._exe_dir)
                 assert run_result.returncode == 0
 
                 # Anthem creates a new directory for each run, so we need to find the result file
@@ -194,15 +200,24 @@ class AnthemPredictor(BasePredictor):
                 
                 pred1 = torch.tensor(result[::2], dtype=torch.double)
                 pred2 = torch.tensor(result[1::2], dtype=torch.double)
-                log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
+                pred_diff[length] = pred1 - pred2
+                if if_ba:
+                    log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
+                    log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
+                    label_diff[mhc_name] = label1 - label2
+                else:
+                    label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
+                    label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
+                    log50k_diff[length] = log50k1 - log50k2
+                
                 shutil.rmtree(latest_dir)
 
-                pred_diff[length] = pred1 - pred2
-                log50k_diff[length] = log50k1 - log50k2
-
         preds_diff[mhc_name] = pred_diff
+        labels_diff[mhc_name] = label1
         log50ks_diff[mhc_name] = log50k_diff
 
-        os.remove('peptides_anthem.txt')
-        return (preds_diff,), log50ks_diff
+        # os.remove('peptides_anthem.txt')
+        if if_ba:
+            return (preds_diff,), log50ks_diff
+        else:
+            return (preds_diff,), labels_diff

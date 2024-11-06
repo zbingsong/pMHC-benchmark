@@ -8,6 +8,9 @@ import pathlib
 import src
 
 
+CONFIGS_DIR = 'configs'
+
+
 class Predictors(enum.Enum):
     '''
     Enum class for model functions
@@ -50,15 +53,19 @@ def main(model_name: str):
         raise ValueError(f'Invalid model name: {model_name}')
 
     predictor: src.BasePredictor = Predictors[model_name.upper()].value
-    predictor.load()
 
-    with open('configs.json', 'r') as f:
+    with open(f'{CONFIGS_DIR}/configs.json', 'r') as f:
         configs = json.load(f)
-        filelist_path = configs['filelist_path']
-        filelist_sq_path = configs['filelist_sq_path']
-        filelist_sensitivity_path = configs['filelist_sensitivity_path']
+        filelist_path = CONFIGS_DIR + configs['filelist_path']
+        filelist_sq_path = CONFIGS_DIR + configs['filelist_sq_path']
+        filelist_sensitivity_el_path = CONFIGS_DIR + configs['filelist_sensitivity_el_path']
+        filelist_sensitivity_ba_path = CONFIGS_DIR + configs['filelist_sensitivity_ba_path']
         data_dir = configs['data_dir']
         output_dir = configs['output_dir']
+        temp_dir = configs['temp_dir']
+    
+    predictor_configs = src.PredictorConfigs(temp_dir)
+    predictor.load(predictor_configs)
 
     filenames = []
     with open(filelist_path, 'r') as f:
@@ -71,12 +78,18 @@ def main(model_name: str):
         for line in f:
             if line.strip() != '' and line[0] != '#':
                 filenames_sq.append(line.strip())
-    
-    filenames_sensitivity = []
-    with open(filelist_sensitivity_path, 'r') as f:
+
+    filenames_sensitivity_el = []
+    with open(filelist_sensitivity_el_path, 'r') as f:
         for line in f:
             if line.strip() != '' and line[0] != '#':
-                filenames_sensitivity.append(line.strip())
+                filenames_sensitivity_el.append(line.strip())
+    
+    filenames_sensitivity_ba = []
+    with open(filelist_sensitivity_ba_path, 'r') as f:
+        for line in f:
+            if line.strip() != '' and line[0] != '#':
+                filenames_sensitivity_ba.append(line.strip())
     
     pathlib.Path(f'{output_dir}/{model_name}').mkdir(parents=True, exist_ok=True)
 
@@ -105,8 +118,17 @@ def main(model_name: str):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
             src.test_retrieval(prediction, labels, time_taken, name)
 
-    # test sensitivity
-    for filename in filenames_sensitivity:
+    # test eluted ligand sensitivity
+    for filename in filenames_sensitivity_el:
+        df = pd.read_csv(f'{data_dir}/{filename}')
+        df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
+        prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
+        for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
+            name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
+            src.test_sensitivity(prediction_diff, log50k_diff, name)
+
+    # test binding affinity sensitivity
+    for filename in filenames_sensitivity_ba:
         df = pd.read_csv(f'{data_dir}/{filename}')
         df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
         prediction_diffs, log50k_diff = predictor.run_sensitivity(df)

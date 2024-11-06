@@ -1,4 +1,4 @@
-from .base import BasePredictor
+from .base import BasePredictor, PredictorConfigs
 from .mhcflurry import MHCflurryPredictor
 from .mixmhcpred22 import MixMHCpred22Predictor
 from .mixmhcpred30 import MixMHCpred30Predictor

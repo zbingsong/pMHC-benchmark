@@ -7,18 +7,20 @@ import json
 import time
 import pathlib
 
-from . import BasePredictor
+from . import BasePredictor, PredictorConfigs
 
 
 class TransPHLAPredictor(BasePredictor):
     tasks = None
     _exe_dir = None
+    _temp_dir = None
     _unknown_mhc = None
     _unknown_peptide = None
     _wd = None
 
     @classmethod
-    def load(cls) -> None:
+    def load(cls, predictor_configs: PredictorConfigs) -> None:
+        cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['Mix']
         cls._wd = os.getcwd()
         curr_dir = pathlib.Path(__file__).parent
@@ -50,13 +52,13 @@ class TransPHLAPredictor(BasePredictor):
             return ({},), {}, {}, 0
         
         df = filtered
-        with open('peptides_transphla.fasta', 'w') as peptide_f, open('mhcs_transphla.fasta', 'w') as mhc_f:
+        with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
             for row in df.itertuples():
                 peptide_f.write(f'>{row.peptide}\n{row.peptide}\n')
                 mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n')
 
         start_time = time.time_ns()
-        run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
+        run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/{cls._temp_dir}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
         end_time = time.time_ns()
         assert run_result.returncode == 0
         times.append(end_time - start_time)
@@ -86,9 +88,9 @@ class TransPHLAPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        if os.path.exists('mhcs_transphla.fasta'):
-            os.remove('mhcs_transphla.fasta')
-            os.remove('peptides_transphla.fasta')
+        # if os.path.exists('mhcs_transphla.fasta'):
+        #     os.remove('mhcs_transphla.fasta')
+        #     os.remove('peptides_transphla.fasta')
         return (preds,), labels, log50ks, sum(times)
     
     @classmethod
@@ -103,7 +105,10 @@ class TransPHLAPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        if_ba = 'log50k1' in df.columns
+        
         preds_diff = {}
+        labels_diff = {}
         log50ks_diff = {}
 
         filtered = df
@@ -120,12 +125,12 @@ class TransPHLAPredictor(BasePredictor):
             return ({},), 0
         
         df = filtered
-        with open('peptides_transphla.fasta', 'w') as peptide_f, open('mhcs_transphla.fasta', 'w') as mhc_f:
+        with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
             for row in df.itertuples():
                 peptide_f.write(f'>{row.peptide1}\n{row.peptide1}\n>{row.peptide2}\n{row.peptide2}\n')
                 mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n>{row.mhc_name}\n{row.mhc_seq}\n')
 
-        run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
+        run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/{cls._temp_dir}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
         assert run_result.returncode == 0
 
         try:
@@ -136,27 +141,41 @@ class TransPHLAPredictor(BasePredictor):
         
         result_df1 = result_df.iloc[::2].reset_index(drop=True)
         result_df2 = result_df.iloc[1::2].reset_index(drop=True)
-        result_df1['log50k1'] = df['log50k1']
-        result_df1['log50k2'] = df['log50k2']
         result_df1.rename(columns={'y_prob': 'y_prob1'}, inplace=True)
         result_df1['y_prob2'] = result_df2['y_prob']
+        if if_ba:
+            result_df1['log50k1'] = df['log50k1']
+            result_df1['log50k2'] = df['log50k2']
+        else:
+            result_df1['label1'] = df['label1']
+            result_df1['label2'] = df['label2']
 
         for mhc_name, group in result_df1.groupby('HLA'):
             pred_diff = {}
+            label_diff = {}
             log50k_diff = {}
             grouped_by_len = group.groupby(group['peptide1'].str.len())
             for length, subgroup in grouped_by_len:
                 pred1 = torch.tensor(subgroup['y_prob1'].tolist(), dtype=torch.double)
                 pred2 = torch.tensor(subgroup['y_prob2'].tolist(), dtype=torch.double)
-                log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
-                log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
                 pred_diff[length] = pred1 - pred2
-                log50k_diff[length] = log50k1 - log50k2
+                if if_ba:
+                    log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
+                    log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
+                    log50k_diff[length] = log50k1 - log50k2
+                else:
+                    label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
+                    label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
+                    label_diff[length] = label1 - label2
 
             preds_diff[mhc_name] = pred_diff
+            labels_diff[mhc_name] = label_diff
             log50ks_diff[mhc_name] = log50k_diff
 
-        if os.path.exists('mhcs_transphla.fasta'):
-            os.remove('mhcs_transphla.fasta')
-            os.remove('peptides_transphla.fasta')
-        return (preds_diff,), log50ks_diff
+        # if os.path.exists('mhcs_transphla.fasta'):
+        #     os.remove('mhcs_transphla.fasta')
+        #     os.remove('peptides_transphla.fasta')
+        if if_ba:
+            return (preds_diff,), log50ks_diff
+        else:
+            return (preds_diff,), labels_diff
