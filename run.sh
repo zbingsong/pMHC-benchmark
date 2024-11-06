@@ -6,4 +6,4 @@ SCREEN_NAME="pmhc_benchmark_$MODEL_NAME"
 
 echo "Job started"
 screen -dmS "$SCREEN_NAME"
-screen -S "$SCREEN_NAME" -X stuff "source env/bin/activate; python main.py -m $MODEL_NAME > output_$MODEL_NAME.log 2>&1; deactivate; exit\n"
+screen -S "$SCREEN_NAME" -X stuff "source env/bin/activate; python main.py -m $MODEL_NAME > temp/output_$MODEL_NAME.log 2>&1; deactivate; exit\n"
