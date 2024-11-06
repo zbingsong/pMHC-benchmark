@@ -168,3 +168,5 @@ peptides.txt
 *.tsv
 *.ipynb
 *.fasta
+logs/
+temp/
