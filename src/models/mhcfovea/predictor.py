@@ -122,11 +122,15 @@ class MHCfoveaPredictor(BasePredictor):
         result_df1 = result_df.iloc[:len(df)].reset_index(drop=True)
         result_df2 = result_df.iloc[len(df):].reset_index(drop=True)
         result_df1.rename(columns={'%rank': '%rank1'}, inplace=True)
-        result_df1['log50k1'] = df['log50k1']
         result_df1['%rank2'] = result_df2['%rank']
-        result_df1['log50k2'] = df['log50k2']
         result_df1['mhc'] = 'HLA-' + result_df1['mhc'].str.replace('*', '')
-        # result_df1 now has columns: peptide1, %rank1, log50k1, peptide2, %rank2, log50k2, mhc
+        if if_ba:
+            result_df1['log50k1'] = df['log50k1']
+            result_df1['log50k2'] = df['log50k2']
+        else:
+            result_df1['label1'] = df['label1']
+            result_df1['label2'] = df['label2']
+        # result_df1 now has columns: peptide1, %rank1, log50k1/label1, peptide2, %rank2, log50k2/label2, mhc
 
         for mhc_name, group in result_df1.groupby('mhc'):
             pred_diff = None

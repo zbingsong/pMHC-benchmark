@@ -17,6 +17,7 @@ class TransPHLAPredictor(BasePredictor):
     _unknown_mhc = None
     _unknown_peptide = None
     _wd = None
+    _max_batch_size = 50000 # tested on my computer only
 
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
@@ -45,23 +46,29 @@ class TransPHLAPredictor(BasePredictor):
         log50ks = {}
         times = []
 
-        with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
-            for row in df.itertuples():
-                peptide_f.write(f'>{row.peptide}\n{row.peptide}\n')
-                mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n')
+        result_dfs = []
+        # divide dataframe into batches, test each batch and finally concatenate the results
+        for i in range(0, len(df), cls._max_batch_size):
+            batch_df = df.iloc[i:i+cls._max_batch_size]
+            with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
+                for row in batch_df.itertuples():
+                    peptide_f.write(f'>{row.peptide}\n{row.peptide}\n')
+                    mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n')
 
-        start_time = time.time_ns()
-        run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/{cls._temp_dir}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
-        end_time = time.time_ns()
-        assert run_result.returncode == 0
-        times.append(end_time - start_time)
+            start_time = time.time_ns()
+            run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/{cls._temp_dir}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
+            end_time = time.time_ns()
+            assert run_result.returncode == 0
+            times.append(end_time - start_time)
 
-        try:
-            result_df = pd.read_csv(f'{cls._exe_dir}/results/predict_results.csv')
-            assert len(result_df) == len(df), f'Length mismatch: {len(result_df)} != {len(df)}'
-        except Exception as e:
-            raise e
+            try:
+                result_df = pd.read_csv(f'{cls._exe_dir}/results/predict_results.csv')
+                assert len(result_df) == len(batch_df), f'Length mismatch: {len(result_df)} != {len(batch_df)}'
+            except Exception as e:
+                raise e
+            result_dfs.append(result_df)
         
+        result_df = pd.concat(result_dfs, ignore_index=True)
         result_df['label'] = df['label']
         if 'log50k' in df.columns:
             result_df['log50k'] = df['log50k']
@@ -109,22 +116,31 @@ class TransPHLAPredictor(BasePredictor):
         labels_diff = None
         log50ks_diff = None
 
-        with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
-            for row in df.itertuples():
-                peptide_f.write(f'>{row.peptide1}\n{row.peptide1}\n>{row.peptide2}\n{row.peptide2}\n')
-                mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n>{row.mhc_name}\n{row.mhc_seq}\n')
+        result_dfs1 = []
+        result_dfs2 = []
+        # divide dataframe into batches, test each batch and finally concatenate the results
+        for i in range(0, len(df), cls._max_batch_size):
+            batch_df = df.iloc[i:i+cls._max_batch_size]
+            with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
+                for row in batch_df.itertuples():
+                    peptide_f.write(f'>{row.peptide1}\n{row.peptide1}\n>{row.peptide2}\n{row.peptide2}\n')
+                    mhc_f.write(f'>{row.mhc_name}\n{row.mhc_seq}\n>{row.mhc_name}\n{row.mhc_seq}\n')
 
-        run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/{cls._temp_dir}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
-        assert run_result.returncode == 0
+            run_result = subprocess.run(['../env/bin/python', 'pHLAIformer.py', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_transphla.fasta', '--HLA_file', f'{cls._wd}/{cls._temp_dir}/mhcs_transphla.fasta', '--output_dir', 'results', '--threshold', '0.5'], cwd=cls._exe_dir)
+            assert run_result.returncode == 0
 
-        try:
-            result_df = pd.read_csv(f'{cls._exe_dir}/results/predict_results.csv')
-            assert len(result_df) == 2 * len(df), f'Length mismatch: {len(result_df)} != {2 * len(df)}'
-        except Exception as e:
-            raise e
+            try:
+                result_df = pd.read_csv(f'{cls._exe_dir}/results/predict_results.csv')
+                assert len(result_df) == 2 * len(batch_df), f'Length mismatch: {len(result_df)} != {2 * len(batch_df)}'
+            except Exception as e:
+                raise e
+            result_df1 = result_df.iloc[::2].reset_index(drop=True)
+            result_df2 = result_df.iloc[1::2].reset_index(drop=True)
+            result_dfs1.append(result_df1)
+            result_dfs2.append(result_df2)
         
-        result_df1 = result_df.iloc[::2].reset_index(drop=True)
-        result_df2 = result_df.iloc[1::2].reset_index(drop=True)
+        result_df1 = pd.concat(result_dfs1, ignore_index=True)
+        result_df2 = pd.concat(result_dfs2, ignore_index=True)
         result_df1.rename(columns={'y_prob': 'y_prob1'}, inplace=True)
         result_df1['y_prob2'] = result_df2['y_prob']
         if if_ba:
