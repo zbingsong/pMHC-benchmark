@@ -29,6 +29,10 @@ class NetMHCpanPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        df = cls._filter(df)
+        if len(df) == 0:
+            print('No valid peptides')
+            return ({},), {}, {}, 0
         df = df.groupby('mhc_name')
 
         BA_preds = {}
@@ -42,12 +46,10 @@ class NetMHCpanPredictor(BasePredictor):
             EL_pred = {}
             label = {}
             log50k = {}
-            group = group.reset_index(drop=True)
+            group.reset_index(drop=True, inplace=True)
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
             for length, subgroup in grouped_by_len:
-                # if length > 14:
-                #     continue
                 peptides = subgroup['peptide'].tolist()
                 with open(f'{cls._temp_dir}/peptides_netmhcpan.txt', 'w') as file:
                     for peptide in peptides:
@@ -86,9 +88,12 @@ class NetMHCpanPredictor(BasePredictor):
     def run_sensitivity(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+    ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        
+        df = cls._filter_sensitivity(df)
+        if len(df) == 0:
+            print('No valid peptides')
+            return ({},), {}
         df = df.groupby('mhc_name')
 
         BA_preds_diff = {}
@@ -97,11 +102,11 @@ class NetMHCpanPredictor(BasePredictor):
         log50ks_diff = {}
 
         for mhc_name, group in df:
-            BA_pred_diff = {}
-            EL_pred_diff = {}
-            label_diff = {}
-            log50k_diff = {}
-            group = group.reset_index(drop=True)
+            BA_pred_diff = []
+            EL_pred_diff = []
+            label_diff = []
+            log50k_diff = []
+            group.reset_index(drop=True, inplace=True)
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
             for length, subgroup in grouped_by_len:
@@ -118,28 +123,30 @@ class NetMHCpanPredictor(BasePredictor):
                 result_df = pd.read_csv(f'{cls._temp_dir}/out_netmhcpan.tsv', sep='\t', skiprows=[0])
                 assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {2 * len(subgroup)} for {mhc_name}'
                 
-                result_df1 = result_df.iloc[:len(subgroup)]
-                result_df2 = result_df.iloc[len(subgroup):]
+                result_df1 = result_df.iloc[:len(subgroup)].reset_index(drop=True)
+                result_df2 = result_df.iloc[len(subgroup):].reset_index(drop=True)
                 BA_pred1 = 100 - torch.tensor(result_df1['BA_Rank'].tolist(), dtype=torch.double)
                 BA_pred2 = 100 - torch.tensor(result_df2['BA_Rank'].tolist(), dtype=torch.double)
-                BA_pred_diff[length] = BA_pred1 - BA_pred2
+                BA_pred_diff.append(BA_pred1 - BA_pred2)
                 EL_pred1 = 100 - torch.tensor(result_df1['EL_Rank'].tolist(), dtype=torch.double)
                 EL_pred2 = 100 - torch.tensor(result_df2['EL_Rank'].tolist(), dtype=torch.double)
-                EL_pred_diff[length] = EL_pred1 - EL_pred2
+                EL_pred_diff.append(EL_pred1 - EL_pred2)
                 if if_ba:
                     log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
                     log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
-                    log50k_diff[length] = log50k1 - log50k2
+                    log50k_diff.append(log50k1 - log50k2)
                 else:
                     label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
                     label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
-                    label_diff[length] = label1 - label2
+                    label_diff.append(label1 - label2)
             
-            BA_preds_diff[mhc_name] = BA_pred_diff
-            EL_preds_diff[mhc_name] = EL_pred_diff
-            labels_diff[mhc_name] = label_diff
-            log50ks_diff[mhc_name] = log50k_diff
-
+            BA_preds_diff[mhc_name] = torch.cat(BA_pred_diff)
+            EL_preds_diff[mhc_name] = torch.cat(EL_pred_diff)
+            if if_ba:
+                log50ks_diff[mhc_name] = torch.cat(log50k_diff)
+            else:
+                labels_diff[mhc_name] = torch.cat(label_diff)
+                
         # os.remove('out1_netmhcpan.tsv')
         # os.remove('out2_netmhcpan.tsv')
         # os.remove('peptides1_netmhcpan.txt')
@@ -148,3 +155,26 @@ class NetMHCpanPredictor(BasePredictor):
             return (BA_preds_diff, EL_preds_diff), log50ks_diff
         else:
             return (BA_preds_diff, EL_preds_diff), labels_diff
+
+    @classmethod
+    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+        filtered = df
+        filtered = filtered[filtered['peptide'].str.len() <= 14]
+        filtered = filtered[filtered['peptide'].str.len() >= 8]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        return filtered
+    
+    @classmethod
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+        filtered = df
+        filtered = filtered[filtered['peptide1'].str.len() <= 14]
+        filtered = filtered[filtered['peptide1'].str.len() >= 8]
+        filtered = filtered[filtered['peptide2'].str.len() <= 14]
+        filtered = filtered[filtered['peptide2'].str.len() >= 8]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        return filtered
+    

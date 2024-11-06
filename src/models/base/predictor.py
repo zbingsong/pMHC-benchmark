@@ -83,7 +83,7 @@ class BasePredictor(abc.ABC):
     def run_sensitivity(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+    ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         '''
         Run the predictor on the given DataFrame for sensitivity analysis.
 
@@ -94,9 +94,9 @@ class BasePredictor(abc.ABC):
             - 'label': Binary labels, or 'log50k': Log50k values.
         
         Returns:
-        tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+        tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
             - Sensitivity result, where metrics are computed per MHC and per peptide length.
-                - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) of dicts (key=peptide length) containg differences in predictions.
-                - Label or Log50k values as a dict (key=MHC names) of dicts (key=peptide length) containg differences in labels or log50ks, depending on input dataframe.
+                - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) containg differences in predictions.
+                - Label or Log50k values as a dict (key=MHC names) containg differences in labels or log50ks, depending on input dataframe.
         '''
         raise NotImplementedError

@@ -37,6 +37,10 @@ class AnthemPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+        df = cls._filter(df)
+        if len(df) == 0:
+            print('No valid peptides')
+            return ({},), {}, {}, 0
         df = df.groupby('mhc_name')
         
         preds = {}
@@ -47,37 +51,17 @@ class AnthemPredictor(BasePredictor):
         num_skipped = 0
 
         for mhc_name, group in df:
-            if not mhc_name.startswith('HLA-'):
-                print(f'Unknown MHC name: {mhc_name}')
-                if cls._unknown_mhc == 'ignore':
-                    num_skipped += len(group)
-                    continue
-                elif cls._unknown_mhc == 'error':
-                    raise ValueError(f'Unknown MHC name: {mhc_name}')
-                
+            group.reset_index(drop=True, inplace=True)
+
             pred = {}
             label = {}
             log50k = {}
-            # peptide should contain none of B, J, O, U, X, Z
-            filtered = group[~group['peptide'].str.contains(r'[BJOUXZ]', regex=True)].reset_index(drop=True)
-            num_skipped += len(group) - len(filtered)
-            group = filtered
-            if len(group) == 0:
-                print(f'No valid peptides for {mhc_name}')
-                continue
+
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
-            mhc_formatted = mhc_name
-            if ':' not in mhc_name:
-                mhc_formatted = mhc_formatted[:-2] + ':' + mhc_formatted[-2:]
-            if '*' not in mhc_name:
-                mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
+            mhc_formatted = cls._format_mhc(mhc_name)
 
             for length, subgroup in grouped_by_len:
-                if length > 14:
-                    print(f'Peptide length too long for {mhc_name}: {length}')
-                    num_skipped += len(subgroup)
-                    continue
                 peptides = subgroup['peptide'].tolist()
                 with open(f'{cls._temp_dir}/peptides_anthem.txt', 'w') as f:
                     for peptide in peptides:
@@ -91,11 +75,8 @@ class AnthemPredictor(BasePredictor):
                     assert run_result.returncode == 0
                 except Exception as e:
                     print(f'Error running Anthem for {mhc_formatted} with length {length}')
-                    if cls._unknown_mhc == 'ignore':
-                        num_skipped += len(subgroup)
-                        continue
-                    elif cls._unknown_mhc == 'error':
-                        raise e
+                    num_skipped += len(subgroup)
+                    continue
                 times.append(end_time - start_time)
 
                 # Anthem creates a new directory for each run, so we need to find the result file
@@ -143,33 +124,30 @@ class AnthemPredictor(BasePredictor):
     def run_sensitivity(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+    ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-
+        df = cls._filter_sensitivity(df)
+        if len(df) == 0:
+            print('No valid peptides')
+            return ({},), {}
         df = df.groupby('mhc_name')
         
         preds_diff = {}
         labels_diff = {}
         log50ks_diff = {}
 
-        for mhc_name, group in df:
-            pred_diff = {}
-            label_diff = {}
-            log50k_diff = {}
+        num_skipped = 0
 
-            group = group[~group['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
-            group = group[~group['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
-            group = group.reset_index(drop=True)
-            if len(group) == 0:
-                print(f'No valid peptides for {mhc_name}')
-                continue
+        for mhc_name, group in df:
+            group.reset_index(drop=True, inplace=True)
+            
+            pred_diff = []
+            label_diff = []
+            log50k_diff = []
+
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
-            mhc_formatted = mhc_name
-            if ':' not in mhc_name:
-                mhc_formatted = mhc_formatted[:-2] + ':' + mhc_formatted[-2:]
-            if '*' not in mhc_name:
-                mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
+            mhc_formatted = cls._format_mhc(mhc_name)
 
             for length, subgroup in grouped_by_len:
                 with open(f'{cls._temp_dir}/peptides_anthem.txt', 'w') as f:
@@ -177,7 +155,12 @@ class AnthemPredictor(BasePredictor):
                         f.write(f'{row.peptide1}\n{row.peptide2}\n')
 
                 run_result = subprocess.run(['env/bin/python', 'sware_b_main.py', '--HLA', mhc_formatted, '--mode', 'prediction', '--peptide_file', f'{cls._wd}/{cls._temp_dir}/peptides_anthem.txt'], cwd=cls._exe_dir)
-                assert run_result.returncode == 0
+                try:
+                    assert run_result.returncode == 0
+                except Exception as e:
+                    print(f'Error running Anthem for {mhc_formatted} with length {length}')
+                    num_skipped += len(subgroup)
+                    continue
 
                 # Anthem creates a new directory for each run, so we need to find the result file
                 files = glob.iglob(f'{cls._exe_dir}/*')
@@ -200,24 +183,65 @@ class AnthemPredictor(BasePredictor):
                 
                 pred1 = torch.tensor(result[::2], dtype=torch.double)
                 pred2 = torch.tensor(result[1::2], dtype=torch.double)
-                pred_diff[length] = pred1 - pred2
+                pred_diff.append(pred1 - pred2)
                 if if_ba:
                     log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
                     log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
-                    label_diff[mhc_name] = label1 - label2
+                    log50k_diff.append(label1 - label2)
                 else:
                     label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
                     label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
-                    log50k_diff[length] = log50k1 - log50k2
+                    label_diff.append(log50k1 - log50k2)
                 
                 shutil.rmtree(latest_dir)
 
-        preds_diff[mhc_name] = pred_diff
-        labels_diff[mhc_name] = label1
-        log50ks_diff[mhc_name] = log50k_diff
+        preds_diff[mhc_name] = torch.cat(pred_diff)
+        if if_ba:
+            log50ks_diff[mhc_name] = torch.cat(log50k_diff)
+        else:
+            labels_diff[mhc_name] = torch.cat(label_diff)
+
+        print(f'Skipped {num_skipped} peptides')
 
         # os.remove('peptides_anthem.txt')
         if if_ba:
             return (preds_diff,), log50ks_diff
         else:
             return (preds_diff,), labels_diff
+
+    @classmethod
+    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+        filtered = df
+        filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[filtered['mhc_name'].str.startswith('HLA-')]
+        filtered = filtered[filtered['peptide'].str.len() <= 14]
+        filtered = filtered[filtered['peptide'].str.len() >= 8]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        return filtered
+    
+    @classmethod
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+        filtered = df
+        filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[filtered['mhc_name'].str.startswith('HLA-')]
+        filtered = filtered[filtered['peptide1'].str.len() <= 14]
+        filtered = filtered[filtered['peptide1'].str.len() >= 8]
+        filtered = filtered[filtered['peptide2'].str.len() <= 14]
+        filtered = filtered[filtered['peptide2'].str.len() >= 8]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        return filtered
+    
+    @classmethod
+    def _format_mhc(cls, mhc_name: str) -> str:
+        mhc_formatted = mhc_name
+        if ':' not in mhc_name:
+            mhc_formatted = mhc_formatted[:-2] + ':' + mhc_formatted[-2:]
+        if '*' not in mhc_name:
+            mhc_formatted = mhc_formatted[:5] + '*' + mhc_formatted[5:]
+        return mhc_formatted
+    

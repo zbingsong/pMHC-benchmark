@@ -35,23 +35,16 @@ class TransPHLAPredictor(BasePredictor):
             cls,
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:       
+        df = cls._filter(df)
+        if len(df) == 0:
+            print('No valid peptides')
+            return ({},), {}, {}, 0
+        
         preds = {}
         labels = {}
         log50ks = {}
         times = []
 
-        filtered = df
-        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
-        filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
-        filtered = filtered[filtered['peptide'].str.len() <= 15]
-        if len(df) != len(filtered):
-            filtered = filtered.reset_index(drop=True)
-            print('Skipped peptides: ', len(df) - len(filtered))
-        if len(filtered) == 0:
-            print('No valid peptides')
-            return ({},), {}, {}, 0
-        
-        df = filtered
         with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
             for row in df.itertuples():
                 peptide_f.write(f'>{row.peptide}\n{row.peptide}\n')
@@ -77,6 +70,7 @@ class TransPHLAPredictor(BasePredictor):
             pred = {}
             label = {}
             log50k = {}
+            group.reset_index(drop=True, inplace=True)
             grouped_by_len = group.groupby(group['peptide'].str.len())
             for length, subgroup in grouped_by_len:
                 pred[length] = torch.tensor(subgroup['y_prob'].tolist(), dtype=torch.double)
@@ -104,27 +98,17 @@ class TransPHLAPredictor(BasePredictor):
     def run_sensitivity(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.DoubleTensor]]]:
+    ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        
-        preds_diff = {}
-        labels_diff = {}
-        log50ks_diff = {}
-
-        filtered = df
-        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
-        filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
-        filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
-        filtered = filtered[filtered['peptide1'].str.len() <= 15]
-        filtered = filtered[filtered['peptide2'].str.len() <= 15]
-        if len(df) != len(filtered):
-            filtered = filtered.reset_index(drop=True)
-            print('Skipped peptides: ', len(df) - len(filtered))
-        if len(filtered) == 0:
+        df = cls._filter_sensitivity(df)
+        if len(df) == 0:
             print('No valid peptides')
-            return ({},), 0
+            return ({},), {}
         
-        df = filtered
+        preds_diff = None
+        labels_diff = None
+        log50ks_diff = None
+
         with open(f'{cls._temp_dir}/peptides_transphla.fasta', 'w') as peptide_f, open(f'{cls._temp_dir}/mhcs_transphla.fasta', 'w') as mhc_f:
             for row in df.itertuples():
                 peptide_f.write(f'>{row.peptide1}\n{row.peptide1}\n>{row.peptide2}\n{row.peptide2}\n')
@@ -154,19 +138,18 @@ class TransPHLAPredictor(BasePredictor):
             pred_diff = {}
             label_diff = {}
             log50k_diff = {}
-            grouped_by_len = group.groupby(group['peptide1'].str.len())
-            for length, subgroup in grouped_by_len:
-                pred1 = torch.tensor(subgroup['y_prob1'].tolist(), dtype=torch.double)
-                pred2 = torch.tensor(subgroup['y_prob2'].tolist(), dtype=torch.double)
-                pred_diff[length] = pred1 - pred2
-                if if_ba:
-                    log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
-                    log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
-                    log50k_diff[length] = log50k1 - log50k2
-                else:
-                    label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
-                    label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
-                    label_diff[length] = label1 - label2
+
+            pred1 = torch.tensor(group['y_prob1'].tolist(), dtype=torch.double)
+            pred2 = torch.tensor(group['y_prob2'].tolist(), dtype=torch.double)
+            pred_diff = pred1 - pred2
+            if if_ba:
+                log50k1 = torch.tensor(group['log50k1'].tolist(), dtype=torch.double)
+                log50k2 = torch.tensor(group['log50k2'].tolist(), dtype=torch.double)
+                log50k_diff = log50k1 - log50k2
+            else:
+                label1 = torch.tensor(group['label1'].tolist(), dtype=torch.long)
+                label2 = torch.tensor(group['label2'].tolist(), dtype=torch.long)
+                label_diff = label1 - label2
 
             preds_diff[mhc_name] = pred_diff
             labels_diff[mhc_name] = label_diff
@@ -179,3 +162,31 @@ class TransPHLAPredictor(BasePredictor):
             return (preds_diff,), log50ks_diff
         else:
             return (preds_diff,), labels_diff
+
+    @classmethod
+    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+        filtered = df
+        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
+        filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[filtered['peptide'].str.len() <= 15]
+        filtered = filtered[filtered['peptide'].str.len() >= 8]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        return filtered
+    
+    @classmethod
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+        filtered = df
+        filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
+        filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
+        filtered = filtered[filtered['peptide1'].str.len() <= 15]
+        filtered = filtered[filtered['peptide1'].str.len() >= 8]
+        filtered = filtered[filtered['peptide2'].str.len() <= 15]
+        filtered = filtered[filtered['peptide2'].str.len() >= 8]
+        if len(df) != len(filtered):
+            filtered = filtered.reset_index(drop=True)
+            print('Skipped peptides: ', len(df) - len(filtered))
+        return filtered
+    
