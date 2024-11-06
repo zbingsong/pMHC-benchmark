@@ -56,10 +56,10 @@ def main(model_name: str):
 
     with open(f'{CONFIGS_DIR}/configs.json', 'r') as f:
         configs = json.load(f)
-        filelist_path = CONFIGS_DIR + configs['filelist_path']
-        filelist_sq_path = CONFIGS_DIR + configs['filelist_sq_path']
-        filelist_sensitivity_el_path = CONFIGS_DIR + configs['filelist_sensitivity_el_path']
-        filelist_sensitivity_ba_path = CONFIGS_DIR + configs['filelist_sensitivity_ba_path']
+        filelist_path = f'{CONFIGS_DIR}/{configs['filelist_path']}'
+        filelist_sq_path = f'{CONFIGS_DIR}/{configs['filelist_sq_path']}'
+        filelist_sensitivity_el_path = f'{CONFIGS_DIR}/{configs['filelist_sensitivity_el_path']}'
+        filelist_sensitivity_ba_path = f'{CONFIGS_DIR}/{configs['filelist_sensitivity_ba_path']}'
         data_dir = configs['data_dir']
         output_dir = configs['output_dir']
         temp_dir = configs['temp_dir']
@@ -102,6 +102,9 @@ def main(model_name: str):
             if_reg = True
         # start_time = time.time_ns()
         predictions, labels, log50ks, time_taken = predictor.run_retrieval(df)
+        if time_taken == 0:
+            print(f'{model_name} is not compatible with any data in {filename}')
+            continue
         # end_time = time.time_ns()
         for prediction, task in zip(predictions, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
@@ -114,6 +117,9 @@ def main(model_name: str):
         df = pd.read_csv(f'{data_dir}/{filename}')
         df = df.astype({'label': int})
         predictions, labels, log50ks, time_taken = predictor.run_sq(df)
+        if time_taken == 0:
+            print(f'{model_name} is not compatible with any data in {filename}')
+            continue
         for prediction, task in zip(predictions, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
             src.test_retrieval(prediction, labels, time_taken, name)
@@ -121,20 +127,26 @@ def main(model_name: str):
     # test eluted ligand sensitivity
     for filename in filenames_sensitivity_el:
         df = pd.read_csv(f'{data_dir}/{filename}')
-        df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
-        prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
+        df = df.astype({'label1': int, 'label2': int})
+        prediction_diffs, label_diff = predictor.run_sensitivity(df)
+        if len(label_diff) == 0:
+            print(f'{model_name} is not compatible with any data in {filename}')
+            continue
         for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
-            src.test_sensitivity(prediction_diff, log50k_diff, name)
+            src.test_sensitivity_el(prediction_diff, label_diff, name)
 
     # test binding affinity sensitivity
     for filename in filenames_sensitivity_ba:
         df = pd.read_csv(f'{data_dir}/{filename}')
-        df = df.astype({'label1': int, 'label2': int, 'log50k1': float, 'log50k2': float})
+        df = df.astype({'log50k1': float, 'log50k2': float})
         prediction_diffs, log50k_diff = predictor.run_sensitivity(df)
+        if len(log50k_diff) == 0:
+            print(f'{model_name} is not compatible with any data in {filename}')
+            continue
         for prediction_diff, task in zip(prediction_diffs, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
-            src.test_sensitivity(prediction_diff, log50k_diff, name)
+            src.test_sensitivity_ba(prediction_diff, log50k_diff, name)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
