@@ -6,6 +6,7 @@ import subprocess
 import json
 import time
 import pathlib
+import typing
 
 from . import BasePredictor, PredictorConfigs
 
@@ -19,6 +20,7 @@ class TransPHLAPredictor(BasePredictor):
     _wd = None
     _max_batch_size = 50000 # tested on my computer only
 
+    @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -31,6 +33,7 @@ class TransPHLAPredictor(BasePredictor):
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
             cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
+    @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -94,13 +97,15 @@ class TransPHLAPredictor(BasePredictor):
         #     os.remove('peptides_transphla.fasta')
         return (preds,), labels, log50ks, sum(times)
     
+    @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
-            
+    
+    @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -112,9 +117,9 @@ class TransPHLAPredictor(BasePredictor):
             print('No valid peptides')
             return ({},), {}
         
-        preds_diff = None
-        labels_diff = None
-        log50ks_diff = None
+        preds_diff = {}
+        labels_diff = {}
+        log50ks_diff = {}
 
         result_dfs1 = []
         result_dfs2 = []
@@ -151,9 +156,9 @@ class TransPHLAPredictor(BasePredictor):
             result_df1['label2'] = df['label2']
 
         for mhc_name, group in result_df1.groupby('HLA'):
-            pred_diff = {}
-            label_diff = {}
-            log50k_diff = {}
+            pred_diff = None
+            label_diff = None
+            log50k_diff = None
 
             pred1 = torch.tensor(group['y_prob1'].tolist(), dtype=torch.double)
             pred2 = torch.tensor(group['y_prob2'].tolist(), dtype=torch.double)

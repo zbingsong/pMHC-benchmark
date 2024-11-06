@@ -6,8 +6,9 @@ import time
 import json
 import os
 import pathlib
+import typing
 
-from . import BasePredictor, SuppressStdout
+from . import BasePredictor, PredictorConfigs, SuppressStdout
 
 
 class MHCflurryPredictor(BasePredictor):
@@ -17,8 +18,9 @@ class MHCflurryPredictor(BasePredictor):
     _unknown_peptide = None
     _exclude_mhc_prefix = None
 
+    @typing.override
     @classmethod
-    def load(cls) -> None:
+    def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls.tasks = ['EL', 'BA']
         cls._predictor = Class1PresentationPredictor.load()
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
@@ -28,6 +30,7 @@ class MHCflurryPredictor(BasePredictor):
             configs = json.load(f)
             cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
+    @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -82,6 +85,7 @@ class MHCflurryPredictor(BasePredictor):
 
         return (presentation_preds, affinity_preds), labels, log50ks, sum(times)
     
+    @typing.override
     @classmethod
     def run_sq(
             cls, 
@@ -89,6 +93,7 @@ class MHCflurryPredictor(BasePredictor):
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
 
+    @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -141,10 +146,10 @@ class MHCflurryPredictor(BasePredictor):
                 label2 = torch.tensor(group['label2'].tolist(), dtype=torch.long)
                 label_diff = label1 - label2
 
-        affinity_preds_diff[mhc_name] = affinity_pred_diff
-        presentation_preds_diff[mhc_name] = presentation_pred_diff
-        labels_diff[mhc_name] = label_diff
-        log50ks_diff[mhc_name] = log50k_diff
+            affinity_preds_diff[mhc_name] = affinity_pred_diff
+            presentation_preds_diff[mhc_name] = presentation_pred_diff
+            labels_diff[mhc_name] = label_diff
+            log50ks_diff[mhc_name] = log50k_diff
 
         if if_ba:
             return (presentation_preds_diff, affinity_preds_diff), log50ks_diff
@@ -155,6 +160,7 @@ class MHCflurryPredictor(BasePredictor):
     def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
         filtered = df
         filtered = filtered[~filtered['mhc_name'].str.startswith(cls._exclude_mhc_prefix)]
+        filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
         filtered = filtered[filtered['peptide'].str.len() <= 15]
         filtered = filtered[filtered['peptide'].str.len() >= 8]
         if len(df) != len(filtered):
@@ -166,8 +172,10 @@ class MHCflurryPredictor(BasePredictor):
     def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
         filtered = df
         filtered = filtered[~filtered['mhc_name'].str.startswith(cls._exclude_mhc_prefix)]
+        filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
         filtered = filtered[filtered['peptide1'].str.len() <= 15]
         filtered = filtered[filtered['peptide1'].str.len() >= 8]
+        filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
         filtered = filtered[filtered['peptide2'].str.len() <= 15]
         filtered = filtered[filtered['peptide2'].str.len() >= 8]
         if len(df) != len(filtered):

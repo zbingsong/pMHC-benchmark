@@ -6,6 +6,7 @@ import subprocess
 import json
 import time
 import pathlib
+import typing
 
 from . import BasePredictor, PredictorConfigs, SuppressStdout
 
@@ -17,6 +18,7 @@ class MHCfoveaPredictor(BasePredictor):
     _unknown_mhc = None
     _wd = None
 
+    @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -28,6 +30,7 @@ class MHCfoveaPredictor(BasePredictor):
             cls._exe_dir = os.path.expanduser(configs['exe_dir'])
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
 
+    @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -85,13 +88,15 @@ class MHCfoveaPredictor(BasePredictor):
         #     os.remove('peptides_mhcfovea.csv')
         return (preds,), labels, log50ks, sum(times)
     
+    @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
-            
+    
+    @typing.override
     @classmethod
     def run_sensitivity(
             cls,

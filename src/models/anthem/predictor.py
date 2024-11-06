@@ -8,6 +8,7 @@ import time
 import pathlib
 import glob
 import shutil
+import typing
 
 from . import BasePredictor, PredictorConfigs
 
@@ -20,6 +21,7 @@ class AnthemPredictor(BasePredictor):
     _unknown_peptide = None
     _wd = None
 
+    @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -32,6 +34,7 @@ class AnthemPredictor(BasePredictor):
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
             cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
+    @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -113,13 +116,15 @@ class AnthemPredictor(BasePredictor):
         print(f'Skipped {num_skipped} peptides')
         return (preds,), labels, log50ks, sum(times)
     
+    @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
-            
+    
+    @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -187,19 +192,21 @@ class AnthemPredictor(BasePredictor):
                 if if_ba:
                     log50k1 = torch.tensor(subgroup['log50k1'].tolist(), dtype=torch.double)
                     log50k2 = torch.tensor(subgroup['log50k2'].tolist(), dtype=torch.double)
-                    log50k_diff.append(label1 - label2)
+                    log50k_diff.append(log50k1 - log50k2)
                 else:
                     label1 = torch.tensor(subgroup['label1'].tolist(), dtype=torch.long)
                     label2 = torch.tensor(subgroup['label2'].tolist(), dtype=torch.long)
-                    label_diff.append(log50k1 - log50k2)
+                    label_diff.append(label1 - label2)
                 
                 shutil.rmtree(latest_dir)
 
-        preds_diff[mhc_name] = torch.cat(pred_diff)
-        if if_ba:
-            log50ks_diff[mhc_name] = torch.cat(log50k_diff)
-        else:
-            labels_diff[mhc_name] = torch.cat(label_diff)
+            if len(pred_diff) == 0:
+                continue
+            preds_diff[mhc_name] = torch.cat(pred_diff)
+            if if_ba:
+                log50ks_diff[mhc_name] = torch.cat(log50k_diff)
+            else:
+                labels_diff[mhc_name] = torch.cat(label_diff)
 
         print(f'Skipped {num_skipped} peptides')
 

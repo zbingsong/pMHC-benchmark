@@ -6,6 +6,7 @@ import os
 import json
 import time
 import pathlib
+import typing
 
 from . import BasePredictor, PredictorConfigs
 
@@ -15,6 +16,7 @@ class NetMHCpanPredictor(BasePredictor):
     _temp_dir = None
     _executable = None
 
+    @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -24,6 +26,7 @@ class NetMHCpanPredictor(BasePredictor):
             configs = json.load(f)
             cls._executable = os.path.expanduser(configs['exe_path'])
 
+    @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -77,6 +80,7 @@ class NetMHCpanPredictor(BasePredictor):
         # os.remove('peptides_netmhcpan.txt')
         return (BA_preds, EL_preds), labels, log50ks, sum(times)
     
+    @typing.override
     @classmethod
     def run_sq(
             cls, 
@@ -84,6 +88,7 @@ class NetMHCpanPredictor(BasePredictor):
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
         return cls.run_retrieval(df)
 
+    @typing.override
     @classmethod
     def run_sensitivity(
             cls,

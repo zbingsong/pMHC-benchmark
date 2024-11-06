@@ -6,6 +6,7 @@ import subprocess
 import json
 import time
 import pathlib
+import typing
 
 from . import BasePredictor, PredictorConfigs
 
@@ -16,6 +17,7 @@ class MixMHCpred22Predictor(BasePredictor):
     _executable = None
     _unknown_mhc = None
 
+    @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -26,6 +28,7 @@ class MixMHCpred22Predictor(BasePredictor):
             cls._executable = os.path.expanduser(configs['exe_path'])
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
 
+    @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -82,6 +85,7 @@ class MixMHCpred22Predictor(BasePredictor):
         #     os.remove('result_mixmhcpred22.tsv')
         return (preds,), labels, log50ks, sum(times)
     
+    @typing.override
     @classmethod
     def run_sq(
             cls,
@@ -146,7 +150,8 @@ class MixMHCpred22Predictor(BasePredictor):
         #     os.remove('peptides_mixmhcpred22.fasta')
         #     os.remove('result_mixmhcpred22.tsv')
         return (preds,), labels, log50ks, sum(times)
-            
+    
+    @typing.override
     @classmethod
     def run_sensitivity(
             cls,
