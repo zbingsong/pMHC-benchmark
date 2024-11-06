@@ -30,7 +30,15 @@ time: {} nanoseconds
 
 '''
 
-TEST_SENSITIVITY_TEMPLATE = '''Test Sensitivity:
+TEST_SENSITIVITY_EL_TEMPLATE = '''Test Sensitivity EL:
+accuracy: {:.4f}
+precision: {:.4f}
+recall: {:.4f}
+f1_score: {:.4f}
+
+'''
+
+TEST_SENSITIVITY_BA_TEMPLATE = '''Test Sensitivity BA:
 accuracy: {:.4f}
 precision: {:.4f}
 recall: {:.4f}
@@ -180,7 +188,56 @@ def test_retrieval(
         ))
 
 
-def test_sensitivity(
+def test_sensitivity_el(
+        predictions_diff: dict[str, torch.DoubleTensor], 
+        labels_diff: dict[str, torch.DoubleTensor],
+        output_filename: str,
+) -> None:
+    preds = []
+    labs = []
+    for mhc_name in predictions_diff.keys():
+        preds.append(predictions_diff[mhc_name])
+        labs.append(labels_diff[mhc_name])
+    predictions_diff = torch.cat(preds)
+    labels_diff = torch.cat(labs)
+    assert predictions_diff.size(0) == labels_diff.size(0), f'{predictions_diff.size()} != {labels_diff.size()}'
+
+    # Treat this as a binary classification problem, where positive differences are considered positive examples
+    binary_predictions_diff = (predictions_diff > 0).int()
+    binary_labels_diff = (labels_diff > 0).int()
+    accuracy = torchmetrics.functional.classification.binary_accuracy(binary_predictions_diff, binary_labels_diff)
+    precision = torchmetrics.functional.classification.binary_precision(binary_predictions_diff, binary_labels_diff)
+    recall = torchmetrics.functional.classification.binary_recall(binary_predictions_diff, binary_labels_diff)
+    f1_score = torchmetrics.functional.classification.binary_f1_score(binary_predictions_diff, binary_labels_diff)
+    
+    with open(f'{output_filename}.txt', 'w') as output_file:
+        output_file.write(TEST_SENSITIVITY_EL_TEMPLATE.format(
+            accuracy, 
+            precision, 
+            recall, 
+            f1_score
+        ))
+
+    # flip the sign of the predictions whose corresponding labels are 0
+    data = torch.where(binary_labels_diff == 0, -predictions_diff, predictions_diff).numpy()
+    plt.figure(figsize=(8, 8))
+    plt.violinplot(data, showmeans=False, showextrema=False)
+    # draw a horizontal line at y=0
+    plt.axhline(y=0, color='r', linestyle='--', linewidth=1)
+    quartile1, medians, quartile3 = np.percentile(data, [25, 50, 75])
+    whiskers_min = np.min(data[data > quartile1 - 1.5 * (quartile3 - quartile1)])
+    whiskers_max = np.max(data[data < quartile3 + 1.5 * (quartile3 - quartile1)])
+    plt.vlines(1, whiskers_min, whiskers_max, linestyle='-', linewidth=1)
+    plt.vlines(1, quartile1, quartile3, linestyle='-', linewidth=15)
+    plt.hlines(medians, 0.9, 1.1, linestyle='-', linewidth=1)
+    plt.hlines([whiskers_min, whiskers_max], 0.975, 1.025, linestyle='-', linewidth=1)
+    plt.ylabel('Difference in EL Score')
+    plt.tight_layout()
+    plt.savefig(f'{output_filename}.png')
+    plt.close()
+
+
+def test_sensitivity_ba(
         predictions_diff: dict[str, dict[str, torch.DoubleTensor]], 
         log50ks_diff: dict[str, dict[str, torch.DoubleTensor]],
         output_filename: str,
@@ -210,7 +267,7 @@ def test_sensitivity(
     spearman_corrcoef = torchmetrics.functional.spearman_corrcoef(predictions_diff, log50ks_diff)
     
     with open(f'{output_filename}.txt', 'w') as output_file:
-        output_file.write(TEST_SENSITIVITY_TEMPLATE.format(
+        output_file.write(TEST_SENSITIVITY_BA_TEMPLATE.format(
             accuracy, 
             precision, 
             recall, 
@@ -219,6 +276,7 @@ def test_sensitivity(
             spearman_corrcoef
         ))
 
+    plt.figure(figsize=(8, 8))
     plt.plot(predictions_diff.numpy(), log50ks_diff.numpy(), '.')
     plt.xlabel('Predicted difference in BA')
     plt.ylabel('Measured difference in BA log50k')
