@@ -1,5 +1,10 @@
-IEDB_41_test
+IEDB_41_test.csv
 Paul2020_test.csv
+Sarkizova2020_no_dup_test.csv
+Marcu2020_test.csv
+Khazan-Kost2022_no_dup_test.csv
+Khan2021_test.csv
+Vadakekolathu2022_no_dup_test.csv
 #mhcbn_EL_no_dup.csv
 #Pearson2016_test.csv
 #Wells2020_ba_test.csv
@@ -13,8 +18,3 @@ Paul2020_test.csv
 #iedb_gnn_test_hla.csv
 #Wells2020_el_test.csv
 #Gfeller2023_test.csv
-Sarkizova2020_no_dup_test.csv
-Marcu2020_test.csv
-Khazan-Kost2022_no_dup_test.csv
-Khan2021_test.csv
-Vadakekolathu2022_no_dup_test.csv
