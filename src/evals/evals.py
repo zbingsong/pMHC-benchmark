@@ -20,14 +20,20 @@ alphas: {}
 proportions: {}
 positives: {}
 totals: {}
-auroc: {:.6f}
-auprc: {:.6f}
-precision@k: {}
-bedroc: {}
-enrichment_factor: {}
-auac: {}
+auroc pooled: {:.6f}
+auroc averaged by MHC: {:.6f}
+auprc pooled: {:.6f}
+auprc averaged by MHC: {:.6f}
+precision@k pooled: {}
+precision@k averaged by MHC: {}
+bedroc pooled: {}
+bedroc averaged by MHC: {}
+enrichment_factor pooled: {}
+enrichment_factor averaged by MHC: {}
+auac pooled: {}
+auac averaged by MHC: {}
 time: {} nanoseconds
-
+skipped rows: {}
 '''
 
 TEST_SENSITIVITY_EL_TEMPLATE = '''Test Sensitivity EL:
@@ -35,7 +41,6 @@ accuracy: {:.4f}
 precision: {:.4f}
 recall: {:.4f}
 f1_score: {:.4f}
-
 '''
 
 TEST_SENSITIVITY_BA_TEMPLATE = '''Test Sensitivity BA:
@@ -45,11 +50,10 @@ recall: {:.4f}
 f1_score: {:.4f}
 pearson_corrcoef: {:.6f}
 spearman_corrcoef: {:.6f}
-
 '''
 
 
-def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
+def _plot_predictions(predictions: torch.DoubleTensor, output_filename: str) -> None:
     '''
     Parameters:
     predictions (torch.FloatTensor): tensor of shape (n, ), containing the cosine similarities between MHC and peptide pairs
@@ -58,7 +62,44 @@ def _plot_similarities(predictions: torch.FloatTensor, name: str) -> None:
     plt.hist(predictions.float(), bins=200)
     plt.xlabel('EL Score')
     plt.ylabel('Frequency')
-    plt.savefig(name)
+    plt.savefig(f'{output_filename}_predictions.png')
+    plt.close()
+
+
+def _plot_sensitivity_el(
+        predictions_diff: torch.DoubleTensor,
+        binary_labels_diff: torch.LongTensor,
+        output_filename: str
+) -> None:
+    # flip the sign of the predictions whose corresponding labels are 0
+    data = torch.where(binary_labels_diff == 0, -predictions_diff, predictions_diff).numpy()
+    plt.figure(figsize=(8, 8))
+    plt.violinplot(data, showmeans=False, showextrema=False)
+    # draw a horizontal line at y=0
+    plt.axhline(y=0, color='r', linestyle='--', linewidth=1)
+    quartile1, medians, quartile3 = np.percentile(data, [25, 50, 75])
+    whiskers_min = np.min(data[data > quartile1 - 1.5 * (quartile3 - quartile1)])
+    whiskers_max = np.max(data[data < quartile3 + 1.5 * (quartile3 - quartile1)])
+    plt.vlines(1, whiskers_min, whiskers_max, linestyle='-', linewidth=1)
+    plt.vlines(1, quartile1, quartile3, linestyle='-', linewidth=15)
+    plt.hlines(medians, 0.9, 1.1, linestyle='-', linewidth=1)
+    plt.hlines([whiskers_min, whiskers_max], 0.975, 1.025, linestyle='-', linewidth=1)
+    plt.ylabel('Difference in EL Score')
+    plt.tight_layout()
+    plt.savefig(f'{output_filename}.png')
+    plt.close()
+
+
+def _plot_sensitivity_ba(
+        predictions_diff: torch.DoubleTensor, 
+        log50ks_diff: torch.DoubleTensor, 
+        output_filename: str
+) -> None:
+    plt.figure(figsize=(8, 8))
+    plt.plot(predictions_diff.numpy(), log50ks_diff.numpy(), '.')
+    plt.xlabel('Predicted difference in BA')
+    plt.ylabel('Measured difference in BA log50k')
+    plt.savefig(f'{output_filename}.png')
     plt.close()
 
 
@@ -68,7 +109,7 @@ def _compute_metrics(
         labs: torch.LongTensor,
         mhc_name: str,
         suffix: str | int,
-):
+) -> None:
     sorted_preds, sorted_indices = torch.sort(preds, descending=True)
     sorted_labs = labs[sorted_indices]
     auroc = compute_binary_auroc(sorted_preds, sorted_labs)
@@ -88,10 +129,32 @@ def _compute_metrics(
         output_df.loc[f'auac_{proportion}_{suffix}', mhc_name] = auac.item()
 
 
+def _compute_averged_metrics(
+        output_df: pd.DataFrame,
+) -> dict[str, float | np.ndarray]:
+    filtered_df = output_df[output_df.index.str.endswith('overall_by_mhc')]
+    filtered_df = filtered_df.drop('overall_by_len', axis=1)
+    averages = filtered_df.mean(axis=1)
+    precision_at_k = np.array([averages[f'precision@{k}_overall_by_mhc'] for k in RETRIEVAL_KS])
+    bedroc = np.array([averages[f'bedroc_{alpha}_overall_by_mhc'] for alpha in ALPHAS])
+    auac = np.array([averages[f'auac_{proportion}_overall_by_mhc'] for proportion in PROPORTIONS])
+    enrichment_factors = np.array([averages[f'enrichment_factor_{proportion}_overall_by_mhc'] for proportion in PROPORTIONS])
+    result = {
+        'auroc': averages['auroc_overall_by_mhc'],
+        'auprc': averages['auprc_overall_by_mhc'],
+        'precision_at_k': precision_at_k,
+        'bedroc': bedroc,
+        'auac': auac,
+        'enrichment_factors': enrichment_factors
+    }
+    return result
+
+
 def test_retrieval(
         predictions: dict[str, dict[str, torch.DoubleTensor]], 
         labels: dict[str, dict[str, torch.LongTensor]], 
         time_taken: int,
+        num_skipped: int,
         output_filename: str,
 ) -> None:
     # if predictions of an mhc is empty, drop it
@@ -163,7 +226,7 @@ def test_retrieval(
     _compute_metrics(output_df, total_preds, total_labs, 'overall_by_len', 'overall_by_mhc')
 
     output_df.to_csv(f'{output_filename}_breakdown.csv')
-    _plot_similarities(total_preds, f'{output_filename}_predictions.png')
+    _plot_predictions(total_preds, output_filename)
 
     auroc = output_df.loc['auroc_overall_by_mhc', 'overall_by_len']
     auprc = output_df.loc['auprc_overall_by_mhc', 'overall_by_len']
@@ -171,6 +234,9 @@ def test_retrieval(
     bedroc = np.array([output_df.loc[f'bedroc_{alpha}_overall_by_mhc', 'overall_by_len'] for alpha in ALPHAS])
     auac = np.array([output_df.loc[f'auac_{proportion}_overall_by_mhc', 'overall_by_len'] for proportion in PROPORTIONS])
     enrichment_factors = np.array([output_df.loc[f'enrichment_factor_{proportion}_overall_by_mhc', 'overall_by_len'] for proportion in PROPORTIONS])
+
+    averaged_metrics = _compute_averged_metrics(output_df)
+
     with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_RETRIEVAL_TEMPLATE.format(
             RETRIEVAL_KS,
@@ -179,12 +245,19 @@ def test_retrieval(
             num_positive_peptides,
             num_total_peptides,
             auroc,
+            averaged_metrics['auroc'],
             auprc,
+            averaged_metrics['auprc'],
             np.array2string(precision_at_k, precision=6, separator=', '),
+            np.array2string(averaged_metrics['precision_at_k'], precision=6, separator=', '),
             np.array2string(bedroc, precision=6, separator=', '),
+            np.array2string(averaged_metrics['bedroc'], precision=6, separator=', '),
             np.array2string(enrichment_factors, precision=6, separator=', '),
+            np.array2string(averaged_metrics['enrichment_factors'], precision=6, separator=', '),
             np.array2string(auac, precision=6, separator=', '),
-            time_taken
+            np.array2string(averaged_metrics['auac'], precision=6, separator=', '),
+            time_taken,
+            num_skipped
         ))
 
 
@@ -218,23 +291,7 @@ def test_sensitivity_el(
             f1_score
         ))
 
-    # flip the sign of the predictions whose corresponding labels are 0
-    data = torch.where(binary_labels_diff == 0, -predictions_diff, predictions_diff).numpy()
-    plt.figure(figsize=(8, 8))
-    plt.violinplot(data, showmeans=False, showextrema=False)
-    # draw a horizontal line at y=0
-    plt.axhline(y=0, color='r', linestyle='--', linewidth=1)
-    quartile1, medians, quartile3 = np.percentile(data, [25, 50, 75])
-    whiskers_min = np.min(data[data > quartile1 - 1.5 * (quartile3 - quartile1)])
-    whiskers_max = np.max(data[data < quartile3 + 1.5 * (quartile3 - quartile1)])
-    plt.vlines(1, whiskers_min, whiskers_max, linestyle='-', linewidth=1)
-    plt.vlines(1, quartile1, quartile3, linestyle='-', linewidth=15)
-    plt.hlines(medians, 0.9, 1.1, linestyle='-', linewidth=1)
-    plt.hlines([whiskers_min, whiskers_max], 0.975, 1.025, linestyle='-', linewidth=1)
-    plt.ylabel('Difference in EL Score')
-    plt.tight_layout()
-    plt.savefig(f'{output_filename}.png')
-    plt.close()
+    _plot_sensitivity_el(predictions_diff, binary_labels_diff, output_filename)
 
 
 def test_sensitivity_ba(
@@ -276,12 +333,7 @@ def test_sensitivity_ba(
             spearman_corrcoef
         ))
 
-    plt.figure(figsize=(8, 8))
-    plt.plot(predictions_diff.numpy(), log50ks_diff.numpy(), '.')
-    plt.xlabel('Predicted difference in BA')
-    plt.ylabel('Measured difference in BA log50k')
-    plt.savefig(f'{output_filename}.png')
-    plt.close()
+    _plot_sensitivity_ba(predictions_diff, log50ks_diff, output_filename)
 
 
 def test_regression(
