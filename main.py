@@ -101,14 +101,14 @@ def main(model_name: str):
             df = df.astype({'log50k': float})
             if_reg = True
         # start_time = time.time_ns()
-        predictions, labels, log50ks, time_taken = predictor.run_retrieval(df)
+        predictions, labels, log50ks, time_taken, num_skipped = predictor.run_retrieval(df)
         if time_taken == 0:
             print(f'{model_name} is not compatible with any data in {filename}')
             continue
         # end_time = time.time_ns()
         for prediction, task in zip(predictions, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
-            src.test_retrieval(prediction, labels, time_taken, name)
+            src.test_retrieval(prediction, labels, time_taken, num_skipped, name)
             if if_reg:
                 src.test_regression(prediction, log50ks, name)
 
@@ -116,13 +116,13 @@ def main(model_name: str):
     for filename in filenames_sq:
         df = pd.read_csv(f'{data_dir}/{filename}')
         df = df.astype({'label': int})
-        predictions, labels, log50ks, time_taken = predictor.run_sq(df)
+        predictions, labels, log50ks, time_taken, num_skipped = predictor.run_sq(df)
         if time_taken == 0:
             print(f'{model_name} is not compatible with any data in {filename}')
             continue
         for prediction, task in zip(predictions, predictor.tasks):
             name = f'{output_dir}/{model_name}/{task}_{filename[:-4]}'
-            src.test_retrieval(prediction, labels, time_taken, name)
+            src.test_retrieval(prediction, labels, time_taken, num_skipped, name)
 
     # test eluted ligand sensitivity
     for filename in filenames_sensitivity_el:
