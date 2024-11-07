@@ -33,8 +33,11 @@ class MixMHCpred30Predictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
-        df = cls._filter(df)
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
+        df, num_skipped = cls._filter(df)
+        if len(df) == 0:
+            print('No valid peptides')
+            return ({},), {}, {}, 0, num_skipped
         df = df.groupby('mhc_name')
 
         preds = {}
@@ -83,18 +86,18 @@ class MixMHCpred30Predictor(BasePredictor):
         # if os.path.exists('peptides_mixmhcpred30.txt'):
         #     os.remove('peptides_mixmhcpred30.txt')
         #     os.remove('result_mixmhcpred30.tsv')
-        return (preds,), labels, log50ks, sum(times)
+        return (preds,), labels, log50ks, sum(times), num_skipped
     
     @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
-        df = cls._filter(df)
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
+        df, num_skipped = cls._filter(df)
         if len(df) == 0:
             print('No valid peptides')
-            return ({},), {}, {}, 0
+            return ({},), {}, {}, 0, num_skipped
         df = df.groupby('mhc_name')
 
         preds = {}
@@ -149,7 +152,7 @@ class MixMHCpred30Predictor(BasePredictor):
         # if os.path.exists('peptides_mixmhcpred30.fasta'):
         #     os.remove('peptides_mixmhcpred30.fasta')
         #     os.remove('result_mixmhcpred30.tsv')
-        return (preds,), labels, log50ks, sum(times)
+        return (preds,), labels, log50ks, sum(times), num_skipped
     
     @typing.override
     @classmethod
@@ -158,7 +161,7 @@ class MixMHCpred30Predictor(BasePredictor):
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        df = cls._filter_sensitivity(df)
+        df, _ = cls._filter_sensitivity(df)
         if len(df) == 0:
             print('No valid peptides')
             return ({},), {}
@@ -220,8 +223,9 @@ class MixMHCpred30Predictor(BasePredictor):
         else:
             return (preds_diff,), labels_diff
 
+    @typing.override
     @classmethod
-    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
         filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -230,10 +234,11 @@ class MixMHCpred30Predictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
+    @typing.override
     @classmethod
-    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
         filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -245,5 +250,5 @@ class MixMHCpred30Predictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     

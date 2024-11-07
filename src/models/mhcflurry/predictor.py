@@ -35,11 +35,11 @@ class MHCflurryPredictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
-        df = cls._filter(df)
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
+        df, num_skipped = cls._filter(df)
         if len(df) == 0:
             print('No valid peptides')
-            return ({},), {}, {}, 0
+            return ({},), {}, {}, 0, num_skipped
         df = df.groupby('mhc_name')
 
         affinity_preds = {}
@@ -49,9 +49,10 @@ class MHCflurryPredictor(BasePredictor):
         times = []
 
         for mhc_name, group in df:
-            formatted_mhc_name = cls._format_mhc_name(mhc_name)
+            formatted_mhc_name = cls.__format_mhc(mhc_name)
             if formatted_mhc_name.startswith(('Mamu-A*1', 'Mamu-A*2')):
                 print(f'MHC {mhc_name} not supported, skip {len(group)} peptide')
+                num_skipped += len(group)
                 continue
             
             group.reset_index(drop=True, inplace=True)
@@ -83,14 +84,14 @@ class MHCflurryPredictor(BasePredictor):
             labels[mhc_name] = label
             log50ks[mhc_name] = log50k
 
-        return (presentation_preds, affinity_preds), labels, log50ks, sum(times)
+        return (presentation_preds, affinity_preds), labels, log50ks, sum(times), num_skipped
     
     @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
 
     @typing.override
@@ -100,7 +101,7 @@ class MHCflurryPredictor(BasePredictor):
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        df = cls._filter_sensitivity(df)
+        df, _ = cls._filter_sensitivity(df)
         if len(df) == 0:
             print('No valid peptides')
             return ({},), {}
@@ -112,7 +113,7 @@ class MHCflurryPredictor(BasePredictor):
         log50ks_diff = {}
 
         for mhc_name, group in df:
-            formatted_mhc_name = cls._format_mhc_name(mhc_name)
+            formatted_mhc_name = cls.__format_mhc(mhc_name)
             if formatted_mhc_name.startswith(('Mamu-A*1', 'Mamu-A*2')):
                 print(f'MHC {mhc_name} not supported, skip {len(group)} peptide')
                 continue
@@ -156,8 +157,9 @@ class MHCflurryPredictor(BasePredictor):
         else:
             return (presentation_preds_diff, affinity_preds_diff), labels_diff
 
+    @typing.override
     @classmethod
-    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[~filtered['mhc_name'].str.startswith(cls._exclude_mhc_prefix)]
         filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -166,10 +168,11 @@ class MHCflurryPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
+    @typing.override
     @classmethod
-    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[~filtered['mhc_name'].str.startswith(cls._exclude_mhc_prefix)]
         filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -181,10 +184,10 @@ class MHCflurryPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
     @classmethod
-    def _format_mhc_name(cls, mhc_name: str) -> str:
+    def __format_mhc(cls, mhc_name: str) -> str:
         if mhc_name.startswith('Eqca-'):
             return mhc_name[:-5] + '*' + mhc_name[-4:]
         elif mhc_name.startswith('Mamu-A1:'):

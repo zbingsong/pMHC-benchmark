@@ -39,19 +39,17 @@ class AnthemPredictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
-        df = cls._filter(df)
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
+        df, num_skipped = cls._filter(df)
         if len(df) == 0:
             print('No valid peptides')
-            return ({},), {}, {}, 0
+            return ({},), {}, {}, 0, num_skipped
         df = df.groupby('mhc_name')
         
         preds = {}
         labels = {}
         log50ks = {}
         times = []
-
-        num_skipped = 0
 
         for mhc_name, group in df:
             group.reset_index(drop=True, inplace=True)
@@ -62,7 +60,7 @@ class AnthemPredictor(BasePredictor):
 
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
-            mhc_formatted = cls._format_mhc(mhc_name)
+            mhc_formatted = cls.__format_mhc(mhc_name)
 
             for length, subgroup in grouped_by_len:
                 peptides = subgroup['peptide'].tolist()
@@ -114,14 +112,14 @@ class AnthemPredictor(BasePredictor):
 
         # os.remove('peptides_anthem.txt')
         print(f'Skipped {num_skipped} peptides')
-        return (preds,), labels, log50ks, sum(times)
+        return (preds,), labels, log50ks, sum(times), num_skipped
     
     @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
     
     @typing.override
@@ -131,7 +129,7 @@ class AnthemPredictor(BasePredictor):
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        df = cls._filter_sensitivity(df)
+        df, num_skipped = cls._filter_sensitivity(df)
         if len(df) == 0:
             print('No valid peptides')
             return ({},), {}
@@ -140,8 +138,6 @@ class AnthemPredictor(BasePredictor):
         preds_diff = {}
         labels_diff = {}
         log50ks_diff = {}
-
-        num_skipped = 0
 
         for mhc_name, group in df:
             group.reset_index(drop=True, inplace=True)
@@ -152,7 +148,7 @@ class AnthemPredictor(BasePredictor):
 
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
-            mhc_formatted = cls._format_mhc(mhc_name)
+            mhc_formatted = cls.__format_mhc(mhc_name)
 
             for length, subgroup in grouped_by_len:
                 with open(f'{cls._temp_dir}/peptides_anthem.txt', 'w') as f:
@@ -216,8 +212,9 @@ class AnthemPredictor(BasePredictor):
         else:
             return (preds_diff,), labels_diff
 
+    @typing.override
     @classmethod
-    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
         filtered = filtered[filtered['mhc_name'].str.startswith('HLA-')]
@@ -226,10 +223,11 @@ class AnthemPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
+    @typing.override
     @classmethod
-    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
         filtered = filtered[~filtered['peptide2'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -241,10 +239,10 @@ class AnthemPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
     @classmethod
-    def _format_mhc(cls, mhc_name: str) -> str:
+    def __format_mhc(cls, mhc_name: str) -> str:
         mhc_formatted = mhc_name
         if ':' not in mhc_name:
             mhc_formatted = mhc_formatted[:-2] + ':' + mhc_formatted[-2:]

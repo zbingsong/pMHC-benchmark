@@ -31,7 +31,7 @@ class BasePredictor(abc.ABC):
     def run_retrieval(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         '''
         Run the predictor on the given DataFrame.
 
@@ -48,7 +48,8 @@ class BasePredictor(abc.ABC):
                 - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) of dicts (key=peptide length).
                 - Labels as a dict (key=MHC names) of dicts (key=peptide length).
                 - Log50k values as a dict (key=MHC names) of dicts (key=peptide length), if available; otherwise the second layer dicts are empty.
-                - Total runtime in nanoseconds.
+            - Total runtime in nanoseconds.
+            - Number of invalid rows.
         '''
         raise NotImplementedError
     
@@ -57,7 +58,7 @@ class BasePredictor(abc.ABC):
     def run_sq(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         '''
         Run the predictor on the given DataFrame, from a square dataset (i.e. every MHC is paired with every peptide).
 
@@ -74,7 +75,8 @@ class BasePredictor(abc.ABC):
                 - Tuple of predictions for each task, where each prediction is a dict (key=MHC names) of dicts (key=peptide length).
                 - Labels as a dict (key=MHC names) of dicts (key=peptide length).
                 - Log50k values as a dict (key=MHC names) of dicts (key=peptide length), if available; otherwise the second layer dicts are empty.
-                - Total runtime in nanoseconds.
+            - Total runtime in nanoseconds.
+            - Number of invalid rows.
         '''
         raise NotImplementedError
 
@@ -100,3 +102,43 @@ class BasePredictor(abc.ABC):
                 - Label or Log50k values as a dict (key=MHC names) containg differences in labels or log50ks, depending on input dataframe.
         '''
         raise NotImplementedError
+
+    @classmethod
+    @abc.abstractmethod
+    def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+        '''
+        Filter the DataFrame to only include valid MHC-peptide pairs.
+
+        Parameters:
+        df (pd.DataFrame): DataFrame with the following columns:
+            - 'mhc_name': MHC names.
+            - 'peptide': Peptide sequences.
+            - 'label': Binary labels.
+            - 'log50k' (optional): Log50k values.
+        
+        Returns:
+        tuple[pd.DataFrame, int]: Filtered DataFrame and number of invalid rows.
+            - pd.DataFrame: Filtered DataFrame.
+            - int: Number of invalid rows.
+        '''
+        raise NotImplementedError
+    
+    @classmethod
+    @abc.abstractmethod
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+        '''
+        Filter the DataFrame to only include valid peptide pairs for sensitivity analysis.
+
+        Parameters:
+        df (pd.DataFrame): DataFrame with the following columns:
+            - 'peptide1': Peptide sequences.
+            - 'peptide2': Peptide sequences.
+            - 'label1' and 'label2': Binary labels, or 'log50k1' and 'log50k2': Log50k values.
+        
+        Returns:
+        tuple[pd.DataFrame, int]: Filtered DataFrame and number of invalid rows.
+            - pd.DataFrame: Filtered DataFrame.
+            - int: Number of invalid rows.
+        '''
+        raise NotImplementedError
+    

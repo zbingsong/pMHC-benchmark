@@ -31,11 +31,11 @@ class NetMHCpanPredictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
-        df = cls._filter(df)
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
+        df, num_skipped = cls._filter(df)
         if len(df) == 0:
             print('No valid peptides')
-            return ({},), {}, {}, 0
+            return ({},), {}, {}, 0, num_skipped
         df = df.groupby('mhc_name')
 
         BA_preds = {}
@@ -78,14 +78,14 @@ class NetMHCpanPredictor(BasePredictor):
 
         # os.remove('out_netmhcpan.tsv')
         # os.remove('peptides_netmhcpan.txt')
-        return (BA_preds, EL_preds), labels, log50ks, sum(times)
+        return (BA_preds, EL_preds), labels, log50ks, sum(times), num_skipped
     
     @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
 
     @typing.override
@@ -95,7 +95,7 @@ class NetMHCpanPredictor(BasePredictor):
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        df = cls._filter_sensitivity(df)
+        df, _ = cls._filter_sensitivity(df)
         if len(df) == 0:
             print('No valid peptides')
             return ({},), {}
@@ -161,18 +161,20 @@ class NetMHCpanPredictor(BasePredictor):
         else:
             return (BA_preds_diff, EL_preds_diff), labels_diff
 
+    @typing.override
     @classmethod
-    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[filtered['peptide'].str.len() <= 14]
         filtered = filtered[filtered['peptide'].str.len() >= 8]
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
+    @typing.override
     @classmethod
-    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[filtered['peptide1'].str.len() <= 14]
         filtered = filtered[filtered['peptide1'].str.len() >= 8]
@@ -181,5 +183,5 @@ class NetMHCpanPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     

@@ -35,18 +35,18 @@ class MHCfoveaPredictor(BasePredictor):
     def run_retrieval(
             cls,
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
-        df = cls._filter(df)
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
+        df, num_skipped = cls._filter(df)
         if len(df) == 0:
             print('No valid peptides')
-            return ({},), {}, {}, 0
+            return ({},), {}, {}, 0, num_skipped
         
         preds = {}
         labels = {}
         log50ks = {}
         times = []
 
-        input_df = pd.DataFrame({'sequence': df['peptide'], 'mhc': df['mhc_name'].transform(cls._format_mhc)})
+        input_df = pd.DataFrame({'sequence': df['peptide'], 'mhc': df['mhc_name'].transform(cls.__format_mhc)})
         input_df.to_csv(f'{cls._temp_dir}/peptides_mhcfovea.csv', index=False)
                 
         start_time = time.time_ns()
@@ -86,14 +86,14 @@ class MHCfoveaPredictor(BasePredictor):
 
         # if os.path.exists('peptides_mhcfovea.csv'):
         #     os.remove('peptides_mhcfovea.csv')
-        return (preds,), labels, log50ks, sum(times)
+        return (preds,), labels, log50ks, sum(times), num_skipped
     
     @typing.override
     @classmethod
     def run_sq(
             cls, 
             df: pd.DataFrame
-    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int]:
+    ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
     
     @typing.override
@@ -103,7 +103,7 @@ class MHCfoveaPredictor(BasePredictor):
             df: pd.DataFrame
     ) -> tuple[tuple[dict[str, torch.DoubleTensor], ...], dict[str, torch.DoubleTensor]]:
         if_ba = 'log50k1' in df.columns
-        df = cls._filter_sensitivity(df)
+        df, _ = cls._filter_sensitivity(df)
         if len(df) == 0:
             print('No valid peptides')
             return ({},), {}
@@ -112,17 +112,14 @@ class MHCfoveaPredictor(BasePredictor):
         labels_diff = {}
         log50ks_diff = {}
 
-        input_df = pd.DataFrame({'sequence': pd.concat([df['peptide1'], df['peptide2']]), 'mhc': pd.concat([df['mhc_name'].transform(cls._format_mhc), df['mhc_name'].transform(cls._format_mhc)])})
+        input_df = pd.DataFrame({'sequence': pd.concat([df['peptide1'], df['peptide2']]), 'mhc': pd.concat([df['mhc_name'].transform(cls.__format_mhc), df['mhc_name'].transform(cls.__format_mhc)])})
         input_df.to_csv(f'{cls._temp_dir}/peptides_mhcfovea.csv', index=False)
             
         with SuppressStdout():
             run_result = subprocess.run(['env/bin/python', 'mhcfovea/predictor.py', f'{cls._wd}/{cls._temp_dir}/peptides_mhcfovea.csv', 'results'], cwd=cls._exe_dir, stdout=subprocess.DEVNULL)
         assert run_result.returncode == 0
-        try:
-            result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
-            assert len(result_df) == 2 * len(df), f'Length mismatch: {len(result_df)} vs {2 * len(df)}'
-        except Exception as e:
-            raise e
+        result_df = pd.read_csv(f'{cls._exe_dir}/results/prediction.csv')
+        assert len(result_df) == 2 * len(df), f'Length mismatch: {len(result_df)} vs {2 * len(df)}'
         
         result_df1 = result_df.iloc[:len(df)].reset_index(drop=True)
         result_df2 = result_df.iloc[len(df):].reset_index(drop=True)
@@ -164,9 +161,10 @@ class MHCfoveaPredictor(BasePredictor):
             return (preds_diff,), log50ks_diff
         else:
             return (preds_diff,), labels_diff
-        
+    
+    @typing.override
     @classmethod
-    def _filter(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
         filtered = filtered[~filtered['peptide'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -175,10 +173,11 @@ class MHCfoveaPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
+    @typing.override
     @classmethod
-    def _filter_sensitivity(cls, df: pd.DataFrame) -> pd.DataFrame:
+    def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
         filtered = filtered[filtered['mhc_name'].str.startswith(('HLA-A', 'HLA-B', 'HLA-C'))]
         filtered = filtered[~filtered['peptide1'].str.contains(r'[BJOUXZ]', regex=True)]
@@ -190,10 +189,10 @@ class MHCfoveaPredictor(BasePredictor):
         if len(df) != len(filtered):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
-        return filtered
+        return filtered, len(df) - len(filtered)
     
     @classmethod
-    def _format_mhc(cls, mhc: str) -> str:
+    def __format_mhc(cls, mhc: str) -> str:
         if ':' in mhc:
             return mhc[4] + '*' + mhc[5:]
         else:
