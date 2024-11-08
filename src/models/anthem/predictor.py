@@ -80,29 +80,30 @@ class AnthemPredictor(BasePredictor):
                     continue
                 times.append(end_time - start_time)
 
+                # Anthem may drop some peptides, so need to keep track of the returned peptides
+                returned_peptides = set()
                 # Anthem creates a new directory for each run, so we need to find the result file
                 files = glob.iglob(f'{cls._exe_dir}/*')
                 latest_dir = max(files, key=os.path.getctime)
-                try:
-                    with open(f'{latest_dir}/length_{length}_prediction_result.txt', 'r') as f:
-                        for _ in range(5):
-                            f.readline()
-                        result = []
-                        for line in f:
-                            line = line.strip()
-                            if line.startswith('-'):
-                                break
-                            cells = line.split()
-                            result.append(float(cells[-1]))
-                        assert len(result) == len(subgroup), f'Length mismatch: {len(result)} vs {len(subgroup)} for {mhc_name} with length {length}'
-                except Exception as e:
-                    print(mhc_name, ' failed')
-                    raise e
+                with open(f'{latest_dir}/length_{length}_prediction_result.txt', 'r') as f:
+                    for _ in range(5):
+                        f.readline()
+                    result = []
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith('-'):
+                            break
+                        cells = line.split()
+                        returned_peptides.add(cells[0])
+                        result.append(float(cells[-1]))
+                    # assert len(result) == len(subgroup), f'Length mismatch: {len(result)} vs {len(subgroup)} for {mhc_name} with length {length}'
                 
+                num_skipped += len(subgroup) - len(returned_peptides)
+                filtered_indices = subgroup['peptide'].isin(returned_peptides)
                 pred[length] = torch.tensor(result, dtype=torch.double)
-                label[length] = torch.tensor(subgroup['label'].tolist(), dtype=torch.long)
+                label[length] = torch.tensor(subgroup[filtered_indices]['label'].tolist(), dtype=torch.long)
                 if 'log50k' in subgroup.columns:
-                    log50k[length] = torch.tensor(subgroup['log50k'].tolist(), dtype=torch.double)
+                    log50k[length] = torch.tensor(subgroup[filtered_indices]['log50k'].tolist(), dtype=torch.double)
                 
                 shutil.rmtree(latest_dir)
             
@@ -111,7 +112,7 @@ class AnthemPredictor(BasePredictor):
             log50ks[mhc_name] = log50k
 
         # os.remove('peptides_anthem.txt')
-        print(f'Skipped {num_skipped} peptides')
+        # print(f'Skipped {num_skipped} peptides')
         return (preds,), labels, log50ks, sum(times), num_skipped
     
     @typing.override
