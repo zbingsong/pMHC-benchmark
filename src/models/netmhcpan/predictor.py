@@ -52,15 +52,18 @@ class NetMHCpanPredictor(BasePredictor):
             group.reset_index(drop=True, inplace=True)
             grouped_by_len = group.groupby(group['peptide'].str.len())
 
+            formatted_mhc_name = cls.__format_mhc(mhc_name)
+
             for length, subgroup in grouped_by_len:
                 peptides = subgroup['peptide'].tolist()
                 with open(f'{cls._temp_dir}/peptides_netmhcpan.txt', 'w') as file:
                     for peptide in peptides:
                         file.write(peptide + '\n')
                 start_time = time.time_ns()
-                run_result = subprocess.run([cls._executable, '-p', f'{cls._temp_dir}/peptides_netmhcpan.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', f'{cls._temp_dir}/out_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
+                process = subprocess.run([cls._executable, '-p', f'{cls._temp_dir}/peptides_netmhcpan.txt', '-a', formatted_mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', f'{cls._temp_dir}/out_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
+                # process.wait()
                 end_time = time.time_ns()
-                assert run_result.returncode == 0
+                assert process.returncode == 0
 
                 result_df = pd.read_csv(f'{cls._temp_dir}/out_netmhcpan.tsv', sep='\t', skiprows=[0])
                 assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {len(subgroup)} for {mhc_name}'
@@ -114,6 +117,8 @@ class NetMHCpanPredictor(BasePredictor):
             group.reset_index(drop=True, inplace=True)
             grouped_by_len = group.groupby(group['peptide1'].str.len())
 
+            formatted_mhc_name = cls.__format_mhc(mhc_name)
+
             for length, subgroup in grouped_by_len:
                 peptides1 = subgroup['peptide1'].tolist()
                 peptides2 = subgroup['peptide2'].tolist()
@@ -122,8 +127,9 @@ class NetMHCpanPredictor(BasePredictor):
                         file.write(peptide + '\n')
                     for peptide in peptides2:
                         file.write(peptide + '\n')
-                run_result = subprocess.run([cls._executable, '-p', f'{cls._temp_dir}/peptides_netmhcpan.txt', '-a', mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', f'{cls._temp_dir}/out_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
-                assert run_result.returncode == 0
+                process = subprocess.run([cls._executable, '-p', f'{cls._temp_dir}/peptides_netmhcpan.txt', '-a', formatted_mhc_name, '-l', str(length), '-BA', '-xls', '-xlsfile', f'{cls._temp_dir}/out_netmhcpan.tsv'], stdout=subprocess.DEVNULL)
+                # process.wait()
+                assert process.returncode == 0
 
                 result_df = pd.read_csv(f'{cls._temp_dir}/out_netmhcpan.tsv', sep='\t', skiprows=[0])
                 assert len(result_df) == len(subgroup), f'Length mismatch: {len(result_df)} != {2 * len(subgroup)} for {mhc_name}'
@@ -184,4 +190,10 @@ class NetMHCpanPredictor(BasePredictor):
             filtered = filtered.reset_index(drop=True)
             print('Skipped peptides: ', len(df) - len(filtered))
         return filtered, len(df) - len(filtered)
+    
+    @classmethod
+    def __format_mhc(cls, mhc_name: str) -> str:
+        if mhc_name.startswith('H2-'):
+            return mhc_name.replace('H2-', 'H-2-')
+        return mhc_name
     
