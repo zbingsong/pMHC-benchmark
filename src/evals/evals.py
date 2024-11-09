@@ -1,13 +1,11 @@
 import torch
-import torchmetrics.functional.classification
-import torchmetrics.functional.retrieval
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
 import collections
 
-from . import compute_binary_auroc, compute_binary_auprc, compute_bedroc, compute_ef, compute_auac
+from . import metrics
 
 
 RETRIEVAL_KS = [1, 3, 5, 10, 20] # for precision@k
@@ -112,20 +110,20 @@ def _compute_metrics(
 ) -> None:
     sorted_preds, sorted_indices = torch.sort(preds, descending=True)
     sorted_labs = labs[sorted_indices]
-    auroc = compute_binary_auroc(sorted_preds, sorted_labs)
+    auroc = metrics.compute_binary_auroc(sorted_preds, sorted_labs)
     output_df.loc[f'auroc_{suffix}', mhc_name] = auroc.item()
-    auprc = compute_binary_auprc(sorted_preds, sorted_labs)
+    auprc = metrics.compute_binary_auprc(sorted_preds, sorted_labs)
     output_df.loc[f'auprc_{suffix}', mhc_name] = auprc.item()
     for k in RETRIEVAL_KS:
-        precision_at_k = torchmetrics.functional.retrieval.retrieval_precision(sorted_preds, sorted_labs, top_k=k)
+        precision_at_k = metrics.compute_retrieval_precision(sorted_labs, top_k=k)
         output_df.loc[f'precision@{k}_{suffix}', mhc_name] = precision_at_k.item()
     for alpha in ALPHAS:
-        bedroc = compute_bedroc(sorted_labs, alpha=alpha)
+        bedroc = metrics.compute_bedroc(sorted_labs, alpha=alpha)
         output_df.loc[f'bedroc_{alpha}_{suffix}', mhc_name] = bedroc.item()
     for proportion in PROPORTIONS:
-        enrichment_factor = compute_ef(sorted_labs, proportion=proportion)
+        enrichment_factor = metrics.compute_ef(sorted_labs, proportion=proportion)
         output_df.loc[f'enrichment_factor_{proportion}_{suffix}', mhc_name] = enrichment_factor.item()
-        auac = compute_auac(sorted_labs, proportion=proportion)
+        auac = metrics.compute_auac(sorted_labs, proportion=proportion)
         output_df.loc[f'auac_{proportion}_{suffix}', mhc_name] = auac.item()
 
 
@@ -278,10 +276,10 @@ def test_sensitivity_el(
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
     binary_labels_diff = (labels_diff > 0).int()
-    accuracy = torchmetrics.functional.classification.binary_accuracy(binary_predictions_diff, binary_labels_diff)
-    precision = torchmetrics.functional.classification.binary_precision(binary_predictions_diff, binary_labels_diff)
-    recall = torchmetrics.functional.classification.binary_recall(binary_predictions_diff, binary_labels_diff)
-    f1_score = torchmetrics.functional.classification.binary_f1_score(binary_predictions_diff, binary_labels_diff)
+    accuracy = metrics.compute_binary_accuracy(binary_predictions_diff, binary_labels_diff)
+    precision = metrics.compute_binary_precision(binary_predictions_diff, binary_labels_diff)
+    recall = metrics.compute_binary_recall(binary_predictions_diff, binary_labels_diff)
+    f1_score = metrics.compute_binary_f1(binary_predictions_diff, binary_labels_diff)
     
     with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_SENSITIVITY_EL_TEMPLATE.format(
@@ -314,14 +312,14 @@ def test_sensitivity_ba(
     # Treat this as a binary classification problem, where positive differences are considered positive examples
     binary_predictions_diff = (predictions_diff > 0).int()
     binary_log50ks_diff = (log50ks_diff > 0).int()
-    accuracy = torchmetrics.functional.classification.binary_accuracy(binary_predictions_diff, binary_log50ks_diff)
-    precision = torchmetrics.functional.classification.binary_precision(binary_predictions_diff, binary_log50ks_diff)
-    recall = torchmetrics.functional.classification.binary_recall(binary_predictions_diff, binary_log50ks_diff)
-    f1_score = torchmetrics.functional.classification.binary_f1_score(binary_predictions_diff, binary_log50ks_diff)
+    accuracy = metrics.compute_binary_accuracy(binary_predictions_diff, binary_log50ks_diff)
+    precision = metrics.compute_binary_precision(binary_predictions_diff, binary_log50ks_diff)
+    recall = metrics.compute_binary_recall(binary_predictions_diff, binary_log50ks_diff)
+    f1_score = metrics.compute_binary_f1(binary_predictions_diff, binary_log50ks_diff)
 
     # Treat this as a regression problem
-    pearson_corrcoef = torchmetrics.functional.pearson_corrcoef(predictions_diff, log50ks_diff)
-    spearman_corrcoef = torchmetrics.functional.spearman_corrcoef(predictions_diff, log50ks_diff)
+    pearson_corrcoef = metrics.compute_pcc(predictions_diff, log50ks_diff)
+    spearman_corrcoef = metrics.compute_srcc(predictions_diff, log50ks_diff)
     
     with open(f'{output_filename}.txt', 'w') as output_file:
         output_file.write(TEST_SENSITIVITY_BA_TEMPLATE.format(
@@ -353,8 +351,8 @@ def test_regression(
     predictions = torch.cat(preds)
     log50ks = torch.cat(logs)
 
-    pearson_corrcoefs = torchmetrics.functional.pearson_corrcoef(predictions, log50ks)
-    spearman_corrcoefs = torchmetrics.functional.spearman_corrcoef(predictions, log50ks)
+    pearson_corrcoefs = metrics.compute_pcc(predictions, log50ks)
+    spearman_corrcoefs = metrics.compute_srcc(predictions, log50ks)
 
     with open(f'{output_filename}.txt', 'a') as output_file:
         output_file.write('Test Regression:\npearson_corrcoef: {:.6f}\nspearman_corrcoef: {:.6f}\n'

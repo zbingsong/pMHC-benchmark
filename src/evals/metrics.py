@@ -1,5 +1,6 @@
 import torch
 import sklearn.metrics
+import scipy.stats
 
 import math
 
@@ -150,37 +151,89 @@ def compute_binary_auprc(
         predictions = predictions.numpy()
         labels = labels.numpy()
         return torch.tensor(sklearn.metrics.average_precision_score(labels, predictions), dtype=torch.double)
+    
+
+def compute_binary_accuracy(
+        binary_predictions: torch.LongTensor,
+        binary_labels: torch.LongTensor
+) -> torch.DoubleTensor:
+    return torch.tensor(sklearn.metrics.accuracy_score(binary_labels, binary_predictions), dtype=torch.double)
 
 
-def compute_retrieval_auroc(
-        sorted_predictions: torch.DoubleTensor, 
+def compute_binary_precision(
+        binary_predictions: torch.LongTensor,
+        binary_labels: torch.LongTensor
+) -> torch.DoubleTensor:
+    return torch.tensor(sklearn.metrics.precision_score(binary_labels, binary_predictions), dtype=torch.double)
+
+
+def compute_binary_recall(
+        binary_predictions: torch.LongTensor,
+        binary_labels: torch.LongTensor
+) -> torch.DoubleTensor:
+    return torch.tensor(sklearn.metrics.recall_score(binary_labels, binary_predictions), dtype=torch.double)
+
+
+def compute_binary_f1(
+        binary_predictions: torch.LongTensor,
+        binary_labels: torch.LongTensor
+) -> torch.DoubleTensor:
+    return torch.tensor(sklearn.metrics.f1_score(binary_labels, binary_predictions), dtype=torch.double)
+
+
+def compute_pcc(
+        predictions: torch.DoubleTensor,
+        targets: torch.DoubleTensor
+) -> torch.DoubleTensor:
+    result = scipy.stats.pearsonr(predictions.numpy(), targets.numpy())
+    return torch.tensor(result.statistic, dtype=torch.double)
+
+
+def compute_srcc(
+        predictions: torch.DoubleTensor,
+        targets: torch.DoubleTensor
+) -> torch.DoubleTensor:
+    result = scipy.stats.spearmanr(predictions.numpy(), targets.numpy())
+    return torch.tensor(result.statistic, dtype=torch.double)
+
+
+def compute_retrieval_precision(
         sorted_labels: torch.LongTensor,
         top_k: int=100
 ) -> torch.DoubleTensor:
     label_sum = sorted_labels[:top_k].sum()
-    # if all labels are negative, return 0
-    if label_sum == 0:
-        return torch.tensor(0, dtype=torch.double)
-    # if all labels are positive, return 1
-    elif label_sum == min(top_k, sorted_labels.size(0)):
-        return torch.tensor(1, dtype=torch.double)
-    # otherwise, compute AUROC normally
-    else:
-        return torch.tensor(sklearn.metrics.roc_auc_score(sorted_labels[:top_k], sorted_predictions[:top_k]), dtype=torch.double)
+    return torch.tensor((label_sum / top_k), dtype=torch.double)
 
 
-def compute_retrieval_auprc(
-        sorted_predictions: torch.DoubleTensor, 
-        sorted_labels: torch.LongTensor,
-        top_k: int=100
-) -> torch.DoubleTensor:
-    label_sum = sorted_labels[:top_k].sum()
-    # if all labels are negative, return 0
-    if label_sum == 0:
-        return torch.tensor(0, dtype=torch.double)
-    # if all labels are positive, return 1
-    elif label_sum == min(top_k, sorted_labels.size(0)):
-        return torch.tensor(1, dtype=torch.double)
-    # otherwise, compute AUPRC normally
-    else:
-        return torch.tensor(sklearn.metrics.average_precision_score(sorted_labels[:top_k], sorted_predictions[:top_k]), dtype=torch.double)
+# def compute_retrieval_auroc(
+#         sorted_predictions: torch.DoubleTensor, 
+#         sorted_labels: torch.LongTensor,
+#         top_k: int=100
+# ) -> torch.DoubleTensor:
+#     label_sum = sorted_labels[:top_k].sum()
+#     # if all labels are negative, return 0
+#     if label_sum == 0:
+#         return torch.tensor(0, dtype=torch.double)
+#     # if all labels are positive, return 1
+#     elif label_sum == min(top_k, sorted_labels.size(0)):
+#         return torch.tensor(1, dtype=torch.double)
+#     # otherwise, compute AUROC normally
+#     else:
+#         return torch.tensor(sklearn.metrics.roc_auc_score(sorted_labels[:top_k], sorted_predictions[:top_k]), dtype=torch.double)
+
+
+# def compute_retrieval_auprc(
+#         sorted_predictions: torch.DoubleTensor, 
+#         sorted_labels: torch.LongTensor,
+#         top_k: int=100
+# ) -> torch.DoubleTensor:
+#     label_sum = sorted_labels[:top_k].sum()
+#     # if all labels are negative, return 0
+#     if label_sum == 0:
+#         return torch.tensor(0, dtype=torch.double)
+#     # if all labels are positive, return 1
+#     elif label_sum == min(top_k, sorted_labels.size(0)):
+#         return torch.tensor(1, dtype=torch.double)
+#     # otherwise, compute AUPRC normally
+#     else:
+#         return torch.tensor(sklearn.metrics.average_precision_score(sorted_labels[:top_k], sorted_predictions[:top_k]), dtype=torch.double)
