@@ -56,10 +56,10 @@ def main(model_name: str):
 
     with open(f'{CONFIGS_DIR}/configs.json', 'r') as f:
         configs = json.load(f)
-        filelist_path = f'{CONFIGS_DIR}/{configs['filelist_path']}'
-        filelist_sq_path = f'{CONFIGS_DIR}/{configs['filelist_sq_path']}'
-        filelist_sensitivity_el_path = f'{CONFIGS_DIR}/{configs['filelist_sensitivity_el_path']}'
-        filelist_sensitivity_ba_path = f'{CONFIGS_DIR}/{configs['filelist_sensitivity_ba_path']}'
+        filelist_path = f'{CONFIGS_DIR}/{configs["filelist_path"]}'
+        filelist_sq_path = f'{CONFIGS_DIR}/{configs["filelist_sq_path"]}'
+        filelist_sensitivity_el_path = f'{CONFIGS_DIR}/{configs["filelist_sensitivity_el_path"]}'
+        filelist_sensitivity_ba_path = f'{CONFIGS_DIR}/{configs["filelist_sensitivity_ba_path"]}'
         data_dir = configs['data_dir']
         output_dir = configs['output_dir']
         temp_dir = configs['temp_dir']
