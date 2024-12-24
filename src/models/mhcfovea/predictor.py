@@ -18,7 +18,7 @@ class MHCfoveaPredictor(BasePredictor):
     _unknown_mhc = None
     _wd = None
 
-    @typing.override
+    # @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -30,7 +30,7 @@ class MHCfoveaPredictor(BasePredictor):
             cls._exe_dir = os.path.expanduser(configs['exe_dir'])
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
 
-    @typing.override
+    # @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -88,7 +88,7 @@ class MHCfoveaPredictor(BasePredictor):
         #     os.remove('peptides_mhcfovea.csv')
         return (preds,), labels, log50ks, sum(times), num_skipped
     
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sq(
             cls, 
@@ -96,7 +96,7 @@ class MHCfoveaPredictor(BasePredictor):
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
     
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -162,7 +162,7 @@ class MHCfoveaPredictor(BasePredictor):
         else:
             return (preds_diff,), labels_diff
     
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
@@ -175,7 +175,7 @@ class MHCfoveaPredictor(BasePredictor):
             print('Skipped peptides: ', len(df) - len(filtered))
         return filtered, len(df) - len(filtered)
     
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df

@@ -17,7 +17,7 @@ class MixMHCpred30Predictor(BasePredictor):
     _executable = None
     _unknown_mhc = None
 
-    @typing.override
+    # @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -28,7 +28,7 @@ class MixMHCpred30Predictor(BasePredictor):
             cls._executable = os.path.expanduser(configs['exe_path'])
             cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
 
-    @typing.override
+    # @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -88,7 +88,7 @@ class MixMHCpred30Predictor(BasePredictor):
         #     os.remove('result_mixmhcpred30.tsv')
         return (preds,), labels, log50ks, sum(times), num_skipped
     
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sq(
             cls, 
@@ -154,7 +154,7 @@ class MixMHCpred30Predictor(BasePredictor):
         #     os.remove('result_mixmhcpred30.tsv')
         return (preds,), labels, log50ks, sum(times), num_skipped
     
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -223,7 +223,7 @@ class MixMHCpred30Predictor(BasePredictor):
         else:
             return (preds_diff,), labels_diff
 
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
@@ -236,7 +236,7 @@ class MixMHCpred30Predictor(BasePredictor):
             print('Skipped peptides: ', len(df) - len(filtered))
         return filtered, len(df) - len(filtered)
     
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df

@@ -18,7 +18,7 @@ class MHCflurryPredictor(BasePredictor):
     _unknown_peptide = None
     _exclude_mhc_prefix = None
 
-    @typing.override
+    # @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls.tasks = ['EL', 'BA']
@@ -30,7 +30,7 @@ class MHCflurryPredictor(BasePredictor):
             configs = json.load(f)
             cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
-    @typing.override
+    # @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -86,7 +86,7 @@ class MHCflurryPredictor(BasePredictor):
 
         return (presentation_preds, affinity_preds), labels, log50ks, sum(times), num_skipped
     
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sq(
             cls, 
@@ -94,7 +94,7 @@ class MHCflurryPredictor(BasePredictor):
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
 
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -157,7 +157,7 @@ class MHCflurryPredictor(BasePredictor):
         else:
             return (presentation_preds_diff, affinity_preds_diff), labels_diff
 
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
@@ -170,7 +170,7 @@ class MHCflurryPredictor(BasePredictor):
             print('Skipped peptides: ', len(df) - len(filtered))
         return filtered, len(df) - len(filtered)
     
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df

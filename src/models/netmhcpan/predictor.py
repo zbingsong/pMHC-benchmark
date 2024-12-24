@@ -16,7 +16,7 @@ class NetMHCpanPredictor(BasePredictor):
     _temp_dir = None
     _executable = None
 
-    @typing.override
+    # @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
@@ -26,7 +26,7 @@ class NetMHCpanPredictor(BasePredictor):
             configs = json.load(f)
             cls._executable = os.path.expanduser(configs['exe_path'])
 
-    @typing.override
+    # @typing.override
     @classmethod
     def run_retrieval(
             cls,
@@ -83,7 +83,7 @@ class NetMHCpanPredictor(BasePredictor):
         # os.remove('peptides_netmhcpan.txt')
         return (BA_preds, EL_preds), labels, log50ks, sum(times), num_skipped
     
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sq(
             cls, 
@@ -91,7 +91,7 @@ class NetMHCpanPredictor(BasePredictor):
     ) -> tuple[tuple[dict[str, dict[str, torch.DoubleTensor]], ...], dict[str, dict[str, torch.LongTensor]], dict[str, dict[str, torch.DoubleTensor]], int, int]:
         return cls.run_retrieval(df)
 
-    @typing.override
+    # @typing.override
     @classmethod
     def run_sensitivity(
             cls,
@@ -167,7 +167,7 @@ class NetMHCpanPredictor(BasePredictor):
         else:
             return (BA_preds_diff, EL_preds_diff), labels_diff
 
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
@@ -178,7 +178,7 @@ class NetMHCpanPredictor(BasePredictor):
             print('Skipped peptides: ', len(df) - len(filtered))
         return filtered, len(df) - len(filtered)
     
-    @typing.override
+    # @typing.override
     @classmethod
     def _filter_sensitivity(cls, df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
         filtered = df
