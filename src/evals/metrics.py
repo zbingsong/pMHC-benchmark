@@ -34,7 +34,7 @@ def compute_auac(
         sorted_labels: torch.LongTensor, 
         proportion: float=0.05
 ) -> torch.DoubleTensor:
-    '''
+    r'''
     AUAC = \int_0^1 F_a(x) dx, where F_a(x) is the fraction of true binders in the top x fraction of the predictions.
     Discrete: AUAC = \sum_{i=0}^N \frac{TP_i}{i}, where TP_i is the number of true positives in the top i predictions.
 
@@ -57,7 +57,7 @@ def _compute_rie(
         sorted_labels: torch.LongTensor,
         alpha: torch.DoubleTensor=20.0
 ) -> torch.DoubleTensor:
-    '''
+    r'''
     Robust Initial Enhancement (RIE): https://doi.org/10.1021/ci0100144
     Implementation based on: https://doi.org/10.1021/ci600426e, equation 19
     RIE = \frac{\frac{1}{n} \sum_{i=1}^n \exp(-\alpha r_i / N)}{\frac{1}{N} \left( \frac{1 - \exp(-\alpha)}{\exp(\alpha / N) - 1} \right)}
@@ -88,7 +88,7 @@ def compute_bedroc(
         sorted_labels: torch.LongTensor,
         alpha: float=20.0
 ) -> torch.DoubleTensor:
-    '''
+    r'''
     Boltzmann-Enhanced Discrimination of Receiver Operating Characteristic (BEDROC): https://doi.org/10.1021/ci600426e
     BEDROC = RIE * \frac{R_{\alpha} \sinh (\alpha / 2)}{\cosh (\alpha / 2) - \cosh (\alpha / 2 - \alpha R_{\alpha})} + \frac{1}{1 - \exp(\alpha (1 - R_{\alpha})}
     where n is the number of true positives, N is the total number of predictions (both positive and negative), and r_i is the rank of the i-th true positive in the predictions (1-indexed).
@@ -202,7 +202,7 @@ def compute_retrieval_precision(
         top_k: int=100
 ) -> torch.DoubleTensor:
     label_sum = sorted_labels[:top_k].sum()
-    return torch.tensor((label_sum / top_k), dtype=torch.double)
+    return label_sum.to(torch.double) / top_k
 
 
 # def compute_retrieval_auroc(
