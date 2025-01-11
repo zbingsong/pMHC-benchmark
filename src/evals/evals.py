@@ -293,18 +293,15 @@ def test_sensitivity_el(
 
 
 def test_sensitivity_ba(
-        predictions_diff: dict[str, dict[str, torch.DoubleTensor]], 
-        log50ks_diff: dict[str, dict[str, torch.DoubleTensor]],
+        predictions_diff: dict[str, torch.DoubleTensor], 
+        log50ks_diff: dict[str, torch.DoubleTensor],
         output_filename: str,
 ) -> None:
     preds = []
     logs = []
     for mhc_name in predictions_diff.keys():
-        pred_dict = predictions_diff[mhc_name]
-        log_dict = log50ks_diff[mhc_name]
-        for length in pred_dict.keys():
-            preds.append(pred_dict[length])
-            logs.append(log_dict[length])
+        preds.append(predictions_diff[mhc_name])
+        logs.append(log50ks_diff[mhc_name])
     predictions_diff = torch.cat(preds)
     log50ks_diff = torch.cat(logs)
     assert predictions_diff.size(0) == log50ks_diff.size(0), f'{predictions_diff.size()} != {log50ks_diff.size()}'
