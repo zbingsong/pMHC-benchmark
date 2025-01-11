@@ -40,6 +40,7 @@ class Predictors(enum.Enum):
     ANTHEM = src.AnthemPredictor()
     TRANSPHLA = src.TransPHLAPredictor()
     MHCFOVEA = src.MHCfoveaPredictor()
+    ESM2 = src.ESM2Predictor()
 
 
 def main(model_name: str):

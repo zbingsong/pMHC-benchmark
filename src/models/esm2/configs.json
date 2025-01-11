@@ -1,0 +1,5 @@
+{
+    "weight_path": "/mnt/c/Users/26352/Documents/repo/esm_weights/esm2_t6_8M_UR50D.pt",
+    "batch_size": 16384,
+    "device": "cuda"
+}

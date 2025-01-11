@@ -6,3 +6,4 @@ from .netmhcpan import NetMHCpanPredictor
 from .anthem import AnthemPredictor
 from .transphla import TransPHLAPredictor
 from .mhcfovea import MHCfoveaPredictor
+from .esm2 import ESM2Predictor
