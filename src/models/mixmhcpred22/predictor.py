@@ -68,7 +68,9 @@ class MixMHCpred22Predictor(BasePredictor):
                 assert len(result_df) == len(peptides), f'Peptide numbers mismatch: {len(result_df)} vs {len(peptides)}'
             except Exception as e:
                 print(mhc_formatted, ' failed')
-                raise e
+                print(e)
+                num_skipped += len(group)
+                continue
             result_df['label'] = group['label']
             if 'log50k' in group.columns:
                 result_df['log50k'] = group['log50k']
