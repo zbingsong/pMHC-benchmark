@@ -63,11 +63,12 @@ class MHCSeqNet2Predictor(BasePredictor):
             raise e
 
         result_df['label'] = df['label']
+        result_df['mhc'] = df['mhc']
         result_df['len'] = result_df['Peptide'].str.len()
         if 'log50k' in df.columns:
             result_df['log50k'] = df['log50k']
 
-        for mhc_name, group in result_df.groupby('Allele'):
+        for mhc_name, group in result_df.groupby('mhc'):
             pred = {}
             label = {}
             log50k = {}
