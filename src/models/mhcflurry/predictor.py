@@ -1,13 +1,8 @@
 from mhcflurry import Class1PresentationPredictor
 import pandas as pd
 import torch
-
 import time
-import json
-import os
-import pathlib
 import typing
-
 from . import BasePredictor, PredictorConfigs, SuppressStdout
 
 
@@ -15,7 +10,6 @@ class MHCflurryPredictor(BasePredictor):
     tasks = None
     _predictor = None
     _log50k_base = None
-    _unknown_peptide = None
     _exclude_mhc_prefix = None
 
     # @typing.override
@@ -25,10 +19,6 @@ class MHCflurryPredictor(BasePredictor):
         cls._predictor = Class1PresentationPredictor.load()
         cls._log50k_base = torch.log(torch.tensor(50000, dtype=torch.double))
         cls._exclude_mhc_prefix = ('H2-Qa2', 'Ceat-', 'BoLA-A', 'BoLA-D', 'BoLA-H', 'BoLA-J', 'BoLA-T', 'Mamu-A2', 'Mamu-A7', 'Mamu-A11')
-        curr_dir = pathlib.Path(__file__).parent
-        with open(f'{curr_dir}/configs.json', 'r') as f:
-            configs = json.load(f)
-            cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
 
     # @typing.override
     @classmethod

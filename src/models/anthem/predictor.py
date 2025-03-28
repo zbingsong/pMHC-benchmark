@@ -1,11 +1,8 @@
 import pandas as pd
 import torch
-
 import os
 import subprocess
-import json
 import time
-import pathlib
 import glob
 import shutil
 import typing
@@ -17,8 +14,6 @@ class AnthemPredictor(BasePredictor):
     tasks = None
     _exe_dir = None
     _temp_dir = None
-    _unknown_mhc = None
-    _unknown_peptide = None
     _wd = None
 
     # @typing.override
@@ -27,12 +22,7 @@ class AnthemPredictor(BasePredictor):
         cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['Mix']
         cls._wd = os.getcwd()
-        curr_dir = pathlib.Path(__file__).parent
-        with open(f'{curr_dir}/configs.json', 'r') as f:
-            configs = json.load(f)
-            cls._exe_dir = os.path.expanduser(configs['exe_dir'])
-            cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
-            cls._unknown_peptide = os.path.expanduser(configs['unknown_peptide'])
+        cls._exe_dir = '~/repo/Anthem'
 
     # @typing.override
     @classmethod

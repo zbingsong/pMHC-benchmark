@@ -1,13 +1,8 @@
 import pandas as pd
 import torch
 import esm
-
-import os
-import json
 import time
-import pathlib
 import typing
-
 from . import BasePredictor, PredictorConfigs
 
 
@@ -49,12 +44,9 @@ class ESM2Predictor(BasePredictor):
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['EL']
-        curr_dir = pathlib.Path(__file__).parent
-        with open(f'{curr_dir}/configs.json', 'r') as f:
-            configs = json.load(f)
-            weight_path = os.path.expanduser(configs['weight_path'])
-            device = configs['device']
-            cls._batch_size = configs['batch_size']
+        weight_path = '/mnt/c/Users/26352/Documents/repo/esm_weights/esm2_t6_8M_UR50D.pt'
+        device = 'cuda:0'
+        cls._batch_size = 16384
         cls._predictor = Model(weight_path, device)
 
     # @typing.override

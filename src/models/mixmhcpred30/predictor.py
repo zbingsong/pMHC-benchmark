@@ -1,13 +1,8 @@
 import pandas as pd
 import torch
-
-import os
 import subprocess
-import json
 import time
-import pathlib
 import typing
-
 from . import BasePredictor, PredictorConfigs
 
 
@@ -15,18 +10,13 @@ class MixMHCpred30Predictor(BasePredictor):
     tasks = None
     _temp_dir = None
     _executable = None
-    _unknown_mhc = None
 
     # @typing.override
     @classmethod
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['EL']
-        curr_dir = pathlib.Path(__file__).parent
-        with open(f'{curr_dir}/configs.json', 'r') as f:
-            configs = json.load(f)
-            cls._executable = os.path.expanduser(configs['exe_path'])
-            cls._unknown_mhc = os.path.expanduser(configs['unknown_mhc'])
+        cls._executable = '~/repo/MixMHCpred-3.0/MixMHCpred'
 
     # @typing.override
     @classmethod

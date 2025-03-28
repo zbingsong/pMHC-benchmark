@@ -1,13 +1,8 @@
 import pandas as pd
 import torch
-
 import subprocess
-import os
-import json
 import time
-import pathlib
 import typing
-
 from . import BasePredictor, PredictorConfigs
 
 
@@ -21,10 +16,7 @@ class NetMHCpanPredictor(BasePredictor):
     def load(cls, predictor_configs: PredictorConfigs) -> None:
         cls._temp_dir = predictor_configs.temp_dir
         cls.tasks = ['BA', 'EL']
-        curr_dir = pathlib.Path(__file__).parent
-        with open(f'{curr_dir}/configs.json', 'r') as f:
-            configs = json.load(f)
-            cls._executable = os.path.expanduser(configs['exe_path'])
+        cls._executable = '/home/bingo/repo/netMHCpan-4.1/netMHCpan'
 
     # @typing.override
     @classmethod

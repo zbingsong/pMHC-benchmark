@@ -41,6 +41,9 @@ class Predictors(enum.Enum):
     TRANSPHLA = src.TransPHLAPredictor()
     MHCFOVEA = src.MHCfoveaPredictor()
     ESM2 = src.ESM2Predictor()
+    # BIGMHC = src.BigMHCPredictor()
+    # TRIPHLAPAN = src.TripHLApanPredictor()
+    MHCSEQNET2 = src.MHCSeqNet2Predictor()
 
 
 def main(model_name: str):
